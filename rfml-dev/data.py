@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import numpy as np
 import yaml
@@ -35,9 +36,16 @@ SIGMF_ANNOTATION_DEFAULT = {
     # "core:comment": None,
 }
 
+SPECTROGRAM_METADATA_DEFAULT = {
+    "sample_start": None,
+    "sample_count": None,
+    "nfft": None,
+}
+
 
 class Data:
     def __init__(self, filename):
+        # filename is a .zst, .sigmf-meta, or .sigmf-data
         self.filename = filename
 
         if not os.path.isfile(self.filename):
@@ -245,7 +253,92 @@ class DtypeEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def images_to_sigmf(directory):
+def images_to_sigmf(metadata_getter):
+    for image_filepath, spectrogram_metadata, sample_filepath in metadata_getter:
+        data_object = Data(sample_filepath)
+
+        # if image not in sigmf["spectrograms"] or current metadata is not a subset
+        if (image_filepath not in data_object.metadata["spectrograms"]) or not (
+            spectrogram_metadata.items()
+            <= data_object.metadata["spectrograms"][image_filepath].items()
+        ):
+            data_object.metadata["spectrograms"][image_filepath] = spectrogram_metadata
+            data_object.write_sigmf_meta(data_object.metadata)
+
+
+def yield_image_metadata_from_filename(images_directory, samples_directory):
+    # Must yield or return lists of image files, sample files and spectrogram metadata
+
+    # IMAGES
+    image_files = [
+        image_file
+        for image_file in os.listdir(images_directory)
+        if image_file.endswith(".png")
+    ]
+
+    for image_filename in image_files:
+        # Get sample file
+        reg = re.compile(r"^(.*)_id(\d+)_batch(\d+)\.png$")
+        sample_filename = reg.match(image_filename).group(1)
+
+        # Get sample count for image
+        sample_count = 1024 * 1024
+
+        # Get nfft for image
+        nfft = 1024
+
+        # Get start sample for image
+        sample_start = int(sample_count * int(reg.match(image_filename).group(3)))
+
+        spectrogram_metadata = SPECTROGRAM_METADATA_DEFAULT.copy()
+        spectrogram_metadata["sample_start"] = sample_start
+        spectrogram_metadata["sample_count"] = sample_count
+        spectrogram_metadata["nfft"] = nfft
+
+        yield str(Path(images_directory, image_filename)), spectrogram_metadata, str(
+            Path(samples_directory, sample_filename)
+        )
+
+def get_custom_metadata(filename, metadata_directory):
+
+    metadata_filename = f"{os.path.splitext(filename)[0]}.json"
+    if metadata_filename not in os.listdir(metadata_directory):
+        raise ValueError(
+            f"Could not find metadata file {metadata_filename}"
+        )
+
+    metadata = json.load(open(Path(metadata_directory, metadata_filename)))
+
+    spectrogram_metadata = {
+        "sample_start": metadata["sample_start_idx"],
+        "sample_count": metadata["mini_batch_size"],
+        "nfft": metadata["nfft"],
+        "augmentations": {
+            "snr": metadata["snr"],
+        },
+    }
+
+    sample_filename = metadata["sample_file"]["filename"]
+
+    return spectrogram_metadata, sample_filename
+
+def yield_image_metadata_from_json(image_directory, metadata_directory, samples_directory):
+    # IMAGES
+    image_files = [
+        image_file
+        for image_file in os.listdir(image_directory)
+        if image_file.endswith(".png")
+    ]
+
+    for image_filename in image_files:
+        spectrogram_metadata, sample_filename = get_custom_metadata(image_filename, metadata_directory)
+
+        yield str(Path(image_directory, image_filename)), spectrogram_metadata, str(
+            Path(samples_directory, sample_filename)
+        )
+
+
+def old_images_to_sigmf(directory):
     # takes directory of spectrogram images
     # create Data object from associated sample file (creates sigmf-meta if doesn't exist)
     # populates sigmf-meta["spectrogams"] object
@@ -293,7 +386,6 @@ def images_to_sigmf(directory):
         }
 
         # Checks if spectrogram_metadata is a subset of any spectrogram in SigMF
-
         if (metadata["img_file"] not in data_object.metadata["spectrograms"]) or not (
             spectrogram_metadata.items()
             <= data_object.metadata["spectrograms"][metadata["img_file"]].items()
@@ -313,7 +405,7 @@ def images_to_sigmf(directory):
         #     data_object.write_sigmf_meta(data_object.metadata)
 
 
-def labels_to_sigmf(directory):
+def old_labels_to_sigmf(directory):
     # takes directory of labels
     # create Data object from associated sample file (creates sigmf-meta if doesn't exist)
     # populates sigmf-meta["spectrogams"] object
@@ -457,7 +549,6 @@ def general_labels_to_sigmf(
 
         if "labelme" in label_type.lower():
             label_metadata = json.load(open(Path(label_dir, label_filename)))
-            data_object.labelme_to_sigmf(label_metadata, metadata["img_file"])
         elif "yolo" in label_type.lower():
             with open(Path(label_dir, label_filename)) as yolo_file:
                 label_metadata = [line.rstrip() for line in yolo_file]
@@ -465,9 +556,6 @@ def general_labels_to_sigmf(
                 dataset_yaml = yaml.safe_load(stream)
                 class_labels = dataset_yaml["names"]
 
-            data_object.yolo_to_sigmf(
-                label_metadata, metadata["img_file"], class_labels
-            )
 
         # Checks if spectrogram_metadata is a subset of any spectrogram in SigMF
         if (metadata["img_file"] in data_object.metadata["spectrograms"]) and (
@@ -504,16 +592,122 @@ def general_labels_to_sigmf(
             ] = spectrogram_metadata
             data_object.write_sigmf_meta(data_object.metadata)
 
+        if "labelme" in label_type.lower():
+            data_object.labelme_to_sigmf(label_metadata, metadata["img_file"])
+        elif "yolo" in label_type.lower():
+            data_object.yolo_to_sigmf(
+                label_metadata, metadata["img_file"], class_labels
+            )
+
+
+
+
+def yield_label_metadata(
+    label_ext,
+    label_directory,
+    image_directory,
+    samples_directory,
+    metadata_directory,
+):
+    # LABELS
+    label_files = [
+        label_file
+        for label_file in os.listdir(label_directory)
+        if label_file.endswith(label_ext)
+    ]
+
+    for label_filename in label_files:
+        # get metadata
+        spectrogram_metadata, sample_filename = get_custom_metadata(label_filename, metadata_directory)
+        image_filename = f"{os.path.splitext(label_filename)[0]}.png"
+
+        yield (
+            str(Path(image_directory, image_filename)),
+            str(Path(label_directory, label_filename)),
+            str(Path(samples_directory, sample_filename)),
+            spectrogram_metadata,
+        )
+
+
+def labels_to_sigmf(metadata_getter, label_type, yolo_dataset_yaml=None):
+    if "yolo" in label_type and yolo_dataset_yaml is None:
+        raise ValueError("Must define yolo_dataset_yaml when using Yolo dataset")
+
+    for (
+        image_filepath,
+        label_filepath,
+        sample_filepath,
+        spectrogram_metadata,
+    ) in metadata_getter:
+        data_object = Data(sample_filepath)
+
+        if "labelme" in label_type.lower():
+            label_metadata = json.load(open(label_filepath))
+        elif "yolo" in label_type.lower():
+            with open(label_filepath) as yolo_file:
+                label_metadata = [line.rstrip() for line in yolo_file]
+            with open(yolo_dataset_yaml, "r") as stream:
+                dataset_yaml = yaml.safe_load(stream)
+                class_labels = dataset_yaml["names"]
+
+
+        # Checks if spectrogram_metadata is a subset of any spectrogram in SigMF
+        if (image_filepath in data_object.metadata["spectrograms"]) and (
+            spectrogram_metadata.items()
+            <= data_object.metadata["spectrograms"][image_filepath].items()
+        ):
+            if "labels" not in data_object.metadata["spectrograms"][image_filepath]:
+                data_object.metadata["spectrograms"][image_filepath]["labels"] = {}
+
+            if (
+                label_type
+                not in data_object.metadata["spectrograms"][image_filepath]["labels"]
+                or data_object.metadata["spectrograms"][image_filepath]["labels"][
+                    label_type
+                ]
+                != label_metadata
+            ):
+                data_object.metadata["spectrograms"][image_filepath]["labels"].update(
+                    {label_type: label_metadata}
+                )
+                data_object.write_sigmf_meta(data_object.metadata)
+
+        else:
+            spectrogram_metadata["labels"] = {label_type: label_metadata}
+            data_object.metadata["spectrograms"][image_filepath] = spectrogram_metadata
+            data_object.write_sigmf_meta(data_object.metadata)
+        
+        if "labelme" in label_type.lower():
+            data_object.labelme_to_sigmf(label_metadata, image_filepath)
+        elif "yolo" in label_type.lower():
+
+            data_object.yolo_to_sigmf(
+                label_metadata, image_filepath, class_labels
+            )
+
 
 if __name__ == "__main__":
     # /Users/ltindall/data/gamutrf/gamutrf-arl/01_30_23/mini2/snr_noise_floor/
 
     directory = "/Users/ltindall/data_test/snr_noise_floor/"
-    # images_to_sigmf(directory)
-    # labels_to_sigmf(directory)
-    general_labels_to_sigmf(
-        directory + "png/YOLODataset/labels/train/",
-        "yolo",
-        directory + "metadata/",
-        directory + "png/YOLODataset/dataset.yaml",
-    )
+    #images_to_sigmf(directory)
+    # # labels_to_sigmf(directory)
+    # general_labels_to_sigmf(
+    #     directory + "png/YOLODataset/labels/train/",
+    #     "yolo",
+    #     directory + "metadata/",
+    #     directory + "png/YOLODataset/dataset.yaml",
+    # )
+
+    custom_images_to_sigmf(yield_image_metadata_from_json(directory+"png", directory+"metadata",directory))
+
+    # directory = "/Users/ltindall/data_test/snr_noise_floor/"
+    # label_ext = ".txt"
+    # label_type = "yolo"
+    # label_directory = directory + "png/YOLODataset/labels/train/"
+    # image_directory = directory + "png/YOLODataset/images/train/"
+    # samples_directory = directory
+    # metadata_directory = directory + "metadata/"
+    # yolo_dataset_yaml = directory + "png/YOLODataset/dataset.yaml"
+    # custom_labels_to_sigmf(yield_label_metadata(label_ext,label_directory,image_directory,samples_directory,metadata_directory), label_type, yolo_dataset_yaml)
+
