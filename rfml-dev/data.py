@@ -129,11 +129,11 @@ class Data:
             start=sample_end_time, stop=sample_start_time, num=int(time_dim)
         )
         sample_space = np.linspace(
-            start=spectrogram_metadata["sample_start"],
-            stop=(
+            start=(
                 spectrogram_metadata["sample_start"]
                 + spectrogram_metadata["sample_count"]
             ),
+            stop=spectrogram_metadata["sample_start"],
             num=int(time_dim) + 1,
         )
 
@@ -147,10 +147,10 @@ class Data:
             sigmf_annotation = SIGMF_ANNOTATION_DEFAULT.copy()
 
             sigmf_annotation["core:sample_start"] = int(
-                sample_space[int(labelme_annotation["points"][0][1])]
+                sample_space[int(labelme_annotation["points"][1][1]) + 1]
             )
             sigmf_annotation["core:sample_count"] = (
-                int(sample_space[int(labelme_annotation["points"][1][1]) + 1])
+                int(sample_space[int(labelme_annotation["points"][0][1])])
                 - sigmf_annotation["core:sample_start"]
             )
             sigmf_annotation["core:freq_lower_edge"] = freq_space[
@@ -191,11 +191,11 @@ class Data:
         height = int(time_dim)
 
         sample_space = np.linspace(
-            start=spectrogram_metadata["sample_start"],
-            stop=(
+            start=(
                 spectrogram_metadata["sample_start"]
                 + spectrogram_metadata["sample_count"]
             ),
+            stop=spectrogram_metadata["sample_start"],
             num=int(time_dim) + 1,
         )
         freq_space = np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim))
@@ -215,9 +215,11 @@ class Data:
             y_max = (y_center + 0.5 * h) * height
             points = [[x_min, y_min], [x_max, y_max]]
 
-            sigmf_annotation["core:sample_start"] = int(sample_space[int(points[0][1])])
+            sigmf_annotation["core:sample_start"] = int(
+                sample_space[int(points[1][1]) + 1]
+            )
             sigmf_annotation["core:sample_count"] = (
-                int(sample_space[int(points[1][1]) + 1])
+                int(sample_space[int(points[0][1])])
                 - sigmf_annotation["core:sample_start"]
             )
             sigmf_annotation["core:freq_lower_edge"] = freq_space[
@@ -254,6 +256,16 @@ class DtypeEncoder(json.JSONEncoder):
 
 
 def images_to_sigmf(metadata_getter):
+    """Instantiates a Data object and then creates or appends to a SigMF-meta file
+        (for the original sample recording) using metadata from a spectrogram image.
+
+    Args:
+        metadata_getter (generator): Function that yields tuples of (image path (str),
+            spectrogram metadata (dict), sample recording path (str)). This generator is
+            responsible for mapping images to sample recording files and populating the
+            necessary fields for the spectrogram metadata dictionary.
+
+    """
     for image_filepath, spectrogram_metadata, sample_filepath in metadata_getter:
         data_object = Data(sample_filepath)
 
@@ -267,7 +279,22 @@ def images_to_sigmf(metadata_getter):
 
 
 def yield_image_metadata_from_filename(images_directory, samples_directory):
-    # Must yield or return lists of image files, sample files and spectrogram metadata
+    """Yields filenames and metadata by parsing metadata from filenames.
+
+    Args:
+        image_directory (str): A directory that contains spectrogram images.
+        samples_directory (str): A directory that contains the original sample recordings
+            for the spectrograms in image_directory.
+
+    Note:
+        Spectrogram metadata dictionary must minimally contain keys "sample_start",
+        "sample_count", and "nfft". The value of "sample_start" must be the absolute index from
+        the original sample recording of the first sample used in generating the spectrogram.
+
+    Returns:
+        generator: (image file name (str), spectrogram metadata (dict), sample file name (str))
+
+    """
 
     # IMAGES
     image_files = [
@@ -301,6 +328,21 @@ def yield_image_metadata_from_filename(images_directory, samples_directory):
 
 
 def get_custom_metadata(filename, metadata_directory):
+    """Loads metadata from custom json files.
+
+    Args:
+        filename (str): Path of the json, image, or label file.
+            (Assumes common path name minus extension)
+        metadata_directory (str): Directory that contains the custom json files.
+
+    Returns:
+        spectrogram_metadata (dict): Dictionary containing metadata about the spectrogram.
+            must minimally contain keys "sample_start", "sample_count", and "nfft". The
+            value of "sample_start" must be the absolute index from the original sample
+            recording of the first sample used in generating the spectrogram.
+        sample_filename (str): Path of the sample recording associated with the spectrogram.
+
+    """
     metadata_filename = f"{os.path.splitext(filename)[0]}.json"
     if metadata_filename not in os.listdir(metadata_directory):
         raise ValueError(f"Could not find metadata file {metadata_filename}")
@@ -324,6 +366,23 @@ def get_custom_metadata(filename, metadata_directory):
 def yield_image_metadata_from_json(
     image_directory, metadata_directory, samples_directory
 ):
+    """Yields filenames and metadata by parsing metadata from json files.
+
+    Args:
+        image_directory (str): A directory that contains spectrogram images.
+        metadata_directory (str): A directory that contains json metadata files.
+        samples_directory (str): A directory that contains the original sample recordings
+            for the spectrograms in image_directory.
+
+    Note:
+        Spectrogram metadata dictionary must minimally contain keys "sample_start",
+        "sample_count", and "nfft". The value of "sample_start" must be the absolute index from
+        the original sample recording of the first sample used in generating the spectrogram.
+
+    Returns:
+        generator: (image file name (str), spectrogram metadata (dict), sample file name (str))
+
+    """
     # IMAGES
     image_files = [
         image_file
@@ -428,11 +487,11 @@ if __name__ == "__main__":
 
     directory = "/Users/ltindall/data_test/snr_noise_floor/"
 
-    images_to_sigmf(
-        yield_image_metadata_from_json(
-            directory + "png", directory + "metadata", directory
-        )
-    )
+    # images_to_sigmf(
+    #     yield_image_metadata_from_json(
+    #         directory + "png", directory + "metadata", directory
+    #     )
+    # )
 
     # directory = "/Users/ltindall/data_test/snr_noise_floor/"
     # label_ext = ".txt"
@@ -442,4 +501,22 @@ if __name__ == "__main__":
     # samples_directory = directory
     # metadata_directory = directory + "metadata/"
     # yolo_dataset_yaml = directory + "png/YOLODataset/dataset.yaml"
-    # custom_labels_to_sigmf(yield_label_metadata(label_ext,label_directory,image_directory,samples_directory,metadata_directory), label_type, yolo_dataset_yaml)
+    # labels_to_sigmf(yield_label_metadata(label_ext,label_directory,image_directory,samples_directory,metadata_directory), label_type, yolo_dataset_yaml)
+
+    directory = "/Users/ltindall/data_test/snr_noise_floor/"
+    label_ext = ".json"
+    label_type = "labelme"
+    label_directory = directory + "png/"
+    image_directory = directory + "png/"
+    samples_directory = directory
+    metadata_directory = directory + "metadata/"
+    labels_to_sigmf(
+        yield_label_metadata(
+            label_ext,
+            label_directory,
+            image_directory,
+            samples_directory,
+            metadata_directory,
+        ),
+        label_type,
+    )
