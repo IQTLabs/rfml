@@ -2,6 +2,8 @@ import os
 import re
 import json
 import numpy as np
+import shutil
+import warnings
 import yaml
 
 from datetime import datetime, timezone
@@ -40,6 +42,23 @@ SPECTROGRAM_METADATA_DEFAULT = {
     "sample_start": None,
     "sample_count": None,
     "nfft": None,
+}
+LABELME_SHAPE_DEFAULT = {
+    "label": None,
+    "text": "",
+    "points": [],
+    "group_id": None,
+    "shape_type": "rectangle",
+    "flags": {},
+}
+LABELME_DEFAULT = {
+    "version": "0.3.3",
+    "flags": {},
+    "shapes": [],
+    "imagePath": None,
+    "imageData": None,
+    "imageHeight": None,
+    "imageWidth": None,
 }
 
 
@@ -105,6 +124,492 @@ class Data:
         )
 
         self.write_sigmf_meta(sigmf_meta)
+
+    def generate_spectrograms(self):
+        # will update sigmf-meta with image metadata
+        raise NotImplementedError
+
+    def sigmf_to_labelme(self):
+        # assume existing images and annotations
+        raise NotImplementedError
+
+    def sigmf_to_yolo(self, annotation, spectrogram):
+        # {
+        #     "core:sample_start": 2008064,
+        #     "core:sample_count": 23552,
+        #     "core:freq_lower_edge": 5726461173.020528,
+        #     "core:freq_upper_edge": 5744538826.979472,
+        #     "core:label": "mini2_video",
+        #     "core:comment": "labelme,yolo"
+        # },
+
+        # "/Users/ltindall/data_test/snr_noise_floor/png/YOLODataset/images/train/gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png": {
+        #     "sample_start": 1572864,
+        #     "sample_count": 524288,
+        #     "nfft": 1024,
+        #     "augmentations": {
+        #         "snr": -10
+        #     },
+        #     "labels": {
+        #         "yolo": [
+        #             "0 0.49951171875 0.146484375 0.8818359375 0.04296875",
+        #             "0 0.50048828125 0.3017578125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.5361328125 0.8818359375 0.044921875",
+        #             "0 0.49951171875 0.6923828125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.927734375 0.8818359375 0.04296875",
+        #             "1 0.45166015625 0.458984375 0.0556640625 0.01953125",
+        #             "1 0.54931640625 0.8505859375 0.0556640625 0.021484375",
+        #             "1 0.54931640625 0.9970703125 0.0556640625 0.001953125"
+        #         ]
+        #     }
+        # },
+
+        if "annotation_labels" not in self.metadata:
+            self.metadata["annotation_labels"] = []
+
+        if annotation["core:label"] not in self.metadata["annotation_labels"]:
+            self.metadata["annotation_labels"].append(annotation["core:label"])
+
+        label_idx = self.metadata["annotation_labels"].index(annotation["core:label"])
+
+        freq_dim = spectrogram["nfft"]
+        time_dim = spectrogram["sample_count"] / freq_dim
+        sample_rate = self.metadata["global"]["core:sample_rate"]
+        freq_center = self.metadata["captures"][0]["core:frequency"]
+        min_freq = freq_center - (sample_rate / 2)
+        max_freq = freq_center + (sample_rate / 2)
+        freq_space = list(np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim)))
+        sample_space = np.linspace(
+            start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
+            stop=spectrogram["sample_start"],
+            num=int(time_dim) + 1,
+        )
+
+        # (freq_space[963]-freq_space[60])/(freq_space[1]-freq_space[0])/1024
+        # (freq_space[963]-freq_space[60])/((max_freq-min_freq)/(1024-1))/1024
+        # width = (annotation["core:freq_upper_edge"] - annotation["core:freq_lower_edge"]) / ((max_freq - min_freq)/(freq_dim-1))/freq_dim
+        width = (
+            freq_space.index(annotation["core:freq_upper_edge"])
+            - freq_space.index(annotation["core:freq_lower_edge"])
+        ) / freq_dim
+
+        # (((freq_space[963]+freq_space[60])/2)-min_freq) / ((max_freq-min_freq)/(1024-1))/1024
+        x_center = (
+            (
+                freq_space.index(annotation["core:freq_upper_edge"])
+                + freq_space.index(annotation["core:freq_lower_edge"])
+            )
+            / 2
+        ) / freq_dim
+
+        # (sample_space.index(2008064)-1 - sample_space.index(2008064+23552)) / 512
+        height = (
+            (sample_space.index(annotation["core:sample_start"]) - 1)
+            - sample_space.index(
+                annotation["core:sample_start"] + annotation["core:sample_count"]
+            )
+        ) / time_dim
+
+        # ((sample_space.index(2008064)-1 + sample_space.index(2008064+23552))/2) / 512
+        y_center = (
+            (
+                (sample_space.index(annotation["core:sample_start"]) - 1)
+                + sample_space.index(
+                    annotation["core:sample_start"] + annotation["core:sample_count"]
+                )
+            )
+            / 2
+        ) / time_dim
+
+        yolo_label = f"{label_idx} {x_center} {y_center} {width} {height}"
+
+        return yolo_label
+
+    def sigmf_to_labelme(self, annotation, spectrogram, spectrogram_filename):
+        # {
+        #     "core:sample_start": 2008064,
+        #     "core:sample_count": 23552,
+        #     "core:freq_lower_edge": 5726461173.020528,
+        #     "core:freq_upper_edge": 5744538826.979472,
+        #     "core:label": "mini2_video",
+        #     "core:comment": "labelme,yolo"
+        # },
+
+        # "/Users/ltindall/data_test/snr_noise_floor/png/YOLODataset/images/train/gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png": {
+        #     "sample_start": 1572864,
+        #     "sample_count": 524288,
+        #     "nfft": 1024,
+        #     "augmentations": {
+        #         "snr": -10
+        #     },
+        #     "labels": {
+        #         "yolo": [
+        #             "0 0.49951171875 0.146484375 0.8818359375 0.04296875",
+        #             "0 0.50048828125 0.3017578125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.5361328125 0.8818359375 0.044921875",
+        #             "0 0.49951171875 0.6923828125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.927734375 0.8818359375 0.04296875",
+        #             "1 0.45166015625 0.458984375 0.0556640625 0.01953125",
+        #             "1 0.54931640625 0.8505859375 0.0556640625 0.021484375",
+        #             "1 0.54931640625 0.9970703125 0.0556640625 0.001953125"
+        #         ]
+        #     }
+        # },
+
+        # "/Users/ltindall/data_test/snr_noise_floor/png/gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png": {
+        #     "sample_start": 1572864,
+        #     "sample_count": 524288,
+        #     "nfft": 1024,
+        #     "augmentations": {
+        #         "snr": -10
+        #     },
+        #     "labels": {
+        #         "labelme": {
+        #             "version": "0.3.3",
+        #             "flags": {},
+        #             "shapes": [
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             60,
+        #                             64
+        #                         ],
+        #                         [
+        #                             963,
+        #                             86
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             61,
+        #                             144
+        #                         ],
+        #                         [
+        #                             964,
+        #                             165
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             61,
+        #                             263
+        #                         ],
+        #                         [
+        #                             964,
+        #                             286
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             60,
+        #                             344
+        #                         ],
+        #                         [
+        #                             963,
+        #                             365
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             61,
+        #                             464
+        #                         ],
+        #                         [
+        #                             964,
+        #                             486
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_telem",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             434,
+        #                             230
+        #                         ],
+        #                         [
+        #                             491,
+        #                             240
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_telem",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             534,
+        #                             430
+        #                         ],
+        #                         [
+        #                             591,
+        #                             441
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_telem",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             534,
+        #                             510
+        #                         ],
+        #                         [
+        #                             591,
+        #                             511
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 }
+        #             ],
+        #             "imagePath": "gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png",
+        #             "imageData": null,
+        #             "imageHeight": 512,
+        #             "imageWidth": 1024
+        #         }
+        #     }
+        # },
+
+        if "annotation_labels" not in self.metadata:
+            self.metadata["annotation_labels"] = []
+
+        if annotation["core:label"] not in self.metadata["annotation_labels"]:
+            self.metadata["annotation_labels"].append(annotation["core:label"])
+
+        freq_dim = spectrogram["nfft"]
+        time_dim = spectrogram["sample_count"] / freq_dim
+        sample_rate = self.metadata["global"]["core:sample_rate"]
+        freq_center = self.metadata["captures"][0]["core:frequency"]
+        min_freq = freq_center - (sample_rate / 2)
+        max_freq = freq_center + (sample_rate / 2)
+        freq_space = list(np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim)))
+        sample_space = np.linspace(
+            start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
+            stop=spectrogram["sample_start"],
+            num=int(time_dim) + 1,
+        )
+
+        labelme_label = LABELME_DEFAULT.copy()
+        labelme_label["imagePath"] = os.path.basename(spectrogram_filename)
+        labelme_label["imageHeight"] = int(time_dim)
+        labelme_label["imageWidth"] = int(freq_dim)
+
+        labelme_label["shapes"].append(LABELME_SHAPE_DEFAULT.copy())
+
+        labelme_label["shapes"][0]["label"] = annotation["core:label"]
+
+        x_min = freq_space.index(annotation["core:freq_lower_edge"])
+        x_max = freq_space.index(annotation["core:freq_upper_edge"])
+
+        y_max = sample_space.index(annotation["core:sample_start"]) - 1
+        y_min = sample_space.index(
+            annotation["core:sample_count"] + annotation["core:sample_start"]
+        )
+
+        points = [[x_min, y_min], [x_max, y_max]]
+        labelme_label["shapes"][0]["points"] = points
+
+        return labelme_label
+
+    def find_matching_spectrogram(self, sample_start, sample_count):
+        """
+        sample_start and sample_count are from annotation
+        """
+        for spectrogram_filename, spectrogram in self.metadata["spectrograms"]:
+            if (sample_start >= spectrogram["sample_start"]) and (
+                (sample_start + sample_count)
+                <= (spectrogram["sample_start"] + spectrogram["sample_count"])
+            ):
+                return spectrogram_filename
+        return ""
+
+    def convert_all_sigmf_to_yolo(self):
+        # assume existing images and annotations/yolo
+        if not self.metadata["spectrograms"]:
+            raise ValueError("No spectrograms found.")
+
+        if not self.metadata["annotations"]:
+            raise ValueError("No annotations found.")
+
+        new_annotations = 0
+
+        for annotation in self.metadata["annotations"]:
+            sample_start = annotation["core:sample_start"]
+            sample_count = annotation["core:sample_count"]
+            spectrogram_filename = self.find_matching_spectrogram(
+                sample_start, sample_count
+            )
+            if not spectrogram_filename:
+                warnings.warn(
+                    f"Matching spectrogram could not be found for annotation: {annotation}"
+                )
+                continue
+            spectrogram = self.metadata["spectrograms"][spectrogram_filename]
+
+            if "labels" not in spectrogram:
+                spectrogram["labels"] = {}
+            if "yolo" not in spectrogram["labels"]:
+                spectrogram["labels"]["yolo"] = []
+
+            yolo_label = self.sigmf_to_yolo(annotation, spectrogram)
+
+            if yolo_label not in spectrogram["labels"]["yolo"]:
+                spectrogram["labels"]["yolo"].append(yolo_label)
+                new_annotations += 1
+
+        if new_annotations:
+            self.write_sigmf_meta(self.metadata)
+
+    def export_labelme(self, label_outdir, image_outdir=None):
+        # assume existing images and annotations/labelme
+        # will convert annotations if necessary
+        self.convert_all_sigmf_to_labelme()
+
+        new_image = 0
+        for spectrogram_filename, spectrogram in self.metadata["spectrograms"]:
+            if "labels" not in spectrogram:
+                continue
+            if "labelme" not in spectrogram["labels"]:
+                continue
+
+            basefilename = os.path.splitext(os.path.basename(spectrogram_filename))[0]
+            labelme_filename = f"{basefilename}.json"
+            with open(Path(label_outdir, labelme_filename), "w") as outfile:
+                print(f"Saving {Path(label_outdir, labelme_filename)}\n")
+                outfile.write(json.dumps(spectrogram["labels"]["labelme"], indent=4))
+
+            if image_outdir:
+                # copy image file into new directory
+                new_spectrogram_filename = Path(
+                    image_outdir, os.path.basename(spectrogram_filename)
+                )
+                shutil.copy2(spectrogram_filename, new_spectrogram_filename)
+                # copy entry in metadata
+                self.metadata["spectrograms"][new_spectrogram_filename] = spectrogram
+                new_image += 1
+
+        if new_image:
+            self.write_sigmf_meta(self.metadata)
+
+    def export_yolo(self, label_outdir, image_outdir=None):
+        self.convert_all_sigmf_to_yolo()
+
+        new_image = 0
+        for spectrogram_filename, spectrogram in self.metadata["spectrograms"]:
+            if "labels" not in spectrogram:
+                continue
+            if "yolo" not in spectrogram["labels"]:
+                continue
+
+            basefilename = os.path.splitext(os.path.basename(spectrogram_filename))[0]
+            yolo_filename = f"{basefilename}.txt"
+            with open(Path(label_outdir, yolo_filename), "w") as f:
+                for annotation in spectrogram["labels"]["yolo"]:
+                    f.write(f"{annotation}\n")
+                print(f"Saving {Path(label_outdir, yolo_filename)}\n")
+
+            if image_outdir:
+                # copy image file into new directory
+                new_spectrogram_filename = Path(
+                    image_outdir, os.path.basename(spectrogram_filename)
+                )
+                shutil.copy2(spectrogram_filename, new_spectrogram_filename)
+                # copy entry in metadata
+                self.metadata["spectrograms"][new_spectrogram_filename] = spectrogram
+                new_image += 1
+
+        if new_image:
+            self.write_sigmf_meta(self.metadata)
+
+    def convert_all_sigmf_to_labelme(self):
+        # assume existing images and annotations/labelme
+        if not self.metadata["spectrograms"]:
+            raise ValueError("No spectrograms found.")
+
+        if not self.metadata["annotations"]:
+            raise ValueError("No annotations found.")
+
+        new_annotations = 0
+
+        for annotation in self.metadata["annotations"]:
+            sample_start = annotation["core:sample_start"]
+            sample_count = annotation["core:sample_count"]
+            spectrogram_filename = self.find_matching_spectrogram(
+                sample_start, sample_count
+            )
+            if not spectrogram_filename:
+                warnings.warn(
+                    f"Matching spectrogram could not be found for annotation: {annotation}"
+                )
+                continue
+            spectrogram = self.metadata["spectrograms"][spectrogram_filename]
+
+            if "labels" not in spectrogram:
+                spectrogram["labels"] = {}
+            if "labelme" not in spectrogram["labels"]:
+                spectrogram["labels"]["labelme"] = {}
+
+            labelme_label = self.sigmf_to_labelme(
+                annotation, spectrogram, spectrogram_filename
+            )
+
+            if not spectrogram["labels"]["labelme"]:
+                spectrogram["labels"]["labelme"] = labelme_label
+                new_annotations += 1
+            elif (
+                labelme_label["shapes"][0]
+                not in spectrogram["labels"]["labelme"]["shapes"]
+            ):
+                spectrogram["labels"]["labelme"]["shapes"].append(
+                    labelme_label["shapes"][0]
+                )
+                new_annotations += 1
+
+        if new_annotations:
+            self.write_sigmf_meta(self.metadata)
 
     def labelme_to_sigmf(self, labelme_json, img_filename):
         spectrogram_metadata = self.metadata["spectrograms"][img_filename]
@@ -449,6 +954,9 @@ def labels_to_sigmf(metadata_getter, label_type, yolo_dataset_yaml=None):
             with open(yolo_dataset_yaml, "r") as stream:
                 dataset_yaml = yaml.safe_load(stream)
                 class_labels = dataset_yaml["names"]
+                if "annotation_labels" not in data_object.metadata:
+                    data_object.metadata["annotation_labels"] = class_labels
+                    data_object.write_sigmf_meta(data_object.metadata)
 
         # Checks if spectrogram_metadata is a subset of any spectrogram in SigMF
         if (image_filepath in data_object.metadata["spectrograms"]) and (
@@ -493,23 +1001,14 @@ if __name__ == "__main__":
     #     )
     # )
 
-    # directory = "/Users/ltindall/data_test/snr_noise_floor/"
-    # label_ext = ".txt"
-    # label_type = "yolo"
-    # label_directory = directory + "png/YOLODataset/labels/train/"
-    # image_directory = directory + "png/YOLODataset/images/train/"
-    # samples_directory = directory
-    # metadata_directory = directory + "metadata/"
-    # yolo_dataset_yaml = directory + "png/YOLODataset/dataset.yaml"
-    # labels_to_sigmf(yield_label_metadata(label_ext,label_directory,image_directory,samples_directory,metadata_directory), label_type, yolo_dataset_yaml)
-
     directory = "/Users/ltindall/data_test/snr_noise_floor/"
-    label_ext = ".json"
-    label_type = "labelme"
-    label_directory = directory + "png/"
-    image_directory = directory + "png/"
+    label_ext = ".txt"
+    label_type = "yolo"
+    label_directory = directory + "png/YOLODataset/labels/train/"
+    image_directory = directory + "png/YOLODataset/images/train/"
     samples_directory = directory
     metadata_directory = directory + "metadata/"
+    yolo_dataset_yaml = directory + "png/YOLODataset/dataset.yaml"
     labels_to_sigmf(
         yield_label_metadata(
             label_ext,
@@ -519,4 +1018,23 @@ if __name__ == "__main__":
             metadata_directory,
         ),
         label_type,
+        yolo_dataset_yaml,
     )
+
+    # directory = "/Users/ltindall/data_test/snr_noise_floor/"
+    # label_ext = ".json"
+    # label_type = "labelme"
+    # label_directory = directory + "png/"
+    # image_directory = directory + "png/"
+    # samples_directory = directory
+    # metadata_directory = directory + "metadata/"
+    # labels_to_sigmf(
+    #     yield_label_metadata(
+    #         label_ext,
+    #         label_directory,
+    #         image_directory,
+    #         samples_directory,
+    #         metadata_directory,
+    #     ),
+    #     label_type,
+    # )
