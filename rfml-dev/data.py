@@ -1,13 +1,23 @@
 import os
 import re
+import gzip
+import copy
+import bz2
+import zstandard
 import json
 import numpy as np
+import shutil
+import warnings
 import yaml
+import matplotlib.pyplot as plt
 
 from datetime import datetime, timezone
 from pathlib import Path
+from PIL import Image
+
 
 from zst_parse import parse_zst_filename
+from spectrogram import spectrogram, spectrogram_cmap
 
 SIGMF_META_DEFAULT = {
     "global": {  # https://github.com/sigmf/SigMF/blob/sigmf-v1.x/sigmf-spec.md#global-object
@@ -40,6 +50,36 @@ SPECTROGRAM_METADATA_DEFAULT = {
     "sample_start": None,
     "sample_count": None,
     "nfft": None,
+    "augmentations": None,
+}
+LABELME_SHAPE_DEFAULT = {
+    "label": None,
+    "text": "",
+    "points": [],
+    "group_id": None,
+    "shape_type": "rectangle",
+    "flags": {},
+}
+
+LABELME_DEFAULT = {
+    "version": "0.3.3",
+    "flags": {},
+    "shapes": [],
+    "imagePath": None,
+    "imageData": None,
+    "imageHeight": None,
+    "imageWidth": None,
+}
+
+SIGMF_TO_NP = {
+    "ci8": "<i1",
+    "ci16_le": "<i2",
+    "ci32_le": "<i4",
+    "cu8": "<u1",
+    "cu16_le": "<u2",
+    "cu32_le": "<u4",
+    "cf32_le": "<f4",
+    "cf64_le": "<f8",
 }
 
 
@@ -84,6 +124,69 @@ class Data:
 
         self.metadata = json.load(open(self.sigmf_meta_filename))
 
+    def get_sample_reader(self):
+        # nosemgrep:github.workflows.config.useless-inner-function
+        def bz2_reader(x):
+            return bz2.open(x, "rb")
+
+        # nosemgrep:github.workflows.config.useless-inner-function
+        def gzip_reader(x):
+            return gzip.open(x, "rb")
+
+        # nosemgrep:github.workflows.config.useless-inner-function
+        def zst_reader(x):
+            return zstandard.ZstdDecompressor().stream_reader(
+                open(x, "rb"), read_across_frames=True
+            )
+
+        def default_reader(x):
+            return open(x, "rb")
+
+        if self.data_filename.endswith(".bz2"):
+            return bz2_reader
+        if self.data_filename.endswith(".gz"):
+            return gzip_reader
+        if self.data_filename.endswith(".zst"):
+            return zst_reader
+
+        return default_reader
+
+    def get_samples(self, n_seek_samples=0, n_samples=None):
+        reader = self.get_sample_reader()
+
+        np_dtype = SIGMF_TO_NP[self.metadata["global"]["core:datatype"]]
+        sample_dtype = np.dtype([("i", np_dtype), ("q", np_dtype)])
+
+        with reader(self.data_filename) as infile:
+            if n_seek_samples:
+                infile.seek(int(n_seek_samples * sample_dtype.itemsize))
+
+            if n_samples:
+                sample_buffer = infile.read(int(n_samples * sample_dtype.itemsize))
+            else:
+                sample_buffer = infile.read()
+
+            n_buffered_samples = int(len(sample_buffer) / sample_dtype.itemsize)
+            if len(sample_buffer) % sample_dtype.itemsize != 0:
+                raise ValueError(
+                    f"Size mismatch. Sample bytes are not a multiple of sample dtype size."
+                )
+
+            if n_buffered_samples == 0:
+                # raise ValueError(f"No samples could be read from {self.data_filename}.")
+                # warnings.warn(f"{n_seek_samples} samples read. No more samples could be read from {self.data_filename}.")
+                # reached end of file
+                return None
+            if n_samples and n_buffered_samples != n_samples:
+                warnings.warn(
+                    f"Could only read {n_buffered_samples}/{n_samples} samples from {self.data_filename}."
+                )
+                return None
+            x1d = np.frombuffer(
+                sample_buffer, dtype=sample_dtype, count=n_buffered_samples
+            )
+            return x1d["i"] + np.csingle(1j) * x1d["q"]
+
     def write_sigmf_meta(self, sigmf_meta):
         with open(self.sigmf_meta_filename, "w") as outfile:
             print(f"Saving {self.sigmf_meta_filename}\n")
@@ -91,7 +194,7 @@ class Data:
 
     def zst_to_sigmf_meta(self):
         file_info = parse_zst_filename(self.data_filename)
-        sigmf_meta = SIGMF_META_DEFAULT.copy()
+        sigmf_meta = copy.deepcopy(SIGMF_META_DEFAULT)
 
         sigmf_meta["global"]["core:dataset"] = self.data_filename
         sigmf_meta["global"]["core:datatype"] = file_info["sigmf_datatype"]
@@ -105,6 +208,564 @@ class Data:
         )
 
         self.write_sigmf_meta(sigmf_meta)
+
+    def generate_spectrograms(
+        self,
+        n_samples,
+        n_fft,
+        image_outdir=None,
+        n_overlap=0,
+        cmap=plt.get_cmap("turbo"),
+        overwrite=False,
+    ):
+        # will update sigmf-meta with image metadata
+
+        if image_outdir is None:
+            image_outdir = f"{self.data_filename}_images"
+        image_outdir = Path(image_outdir)
+        image_outdir.mkdir(parents=True, exist_ok=True)
+
+        n_seek_samples = 0
+        while True:
+            image_filename = (
+                f"{os.path.basename(self.data_filename)}_{n_seek_samples}.png"
+            )
+            image_filepath = str(Path(image_outdir, image_filename))
+
+            if not overwrite and (image_filepath in self.metadata["spectrograms"]):
+                n_seek_samples += n_samples
+                continue
+
+            samples = self.get_samples(
+                n_seek_samples=n_seek_samples, n_samples=n_samples
+            )
+            if samples is None:
+                break
+
+            spectrogram_data, spectrogram_raw = spectrogram(
+                samples,
+                self.metadata["global"]["core:sample_rate"],
+                n_fft,
+                n_overlap,
+            )
+            spectrogram_color = spectrogram_cmap(spectrogram_data, cmap)
+
+            spectrogram_image = Image.fromarray(spectrogram_color)
+            spectrogram_image.save(image_filepath)
+
+            spectrogram_metadata = copy.deepcopy(SPECTROGRAM_METADATA_DEFAULT)
+            spectrogram_metadata["sample_start"] = n_seek_samples
+            spectrogram_metadata["sample_count"] = n_samples
+            spectrogram_metadata["nfft"] = n_fft
+
+            self.import_image(image_filepath, spectrogram_metadata, overwrite=overwrite)
+
+            n_seek_samples += n_samples
+
+    def sigmf_to_yolo(self, annotation, spectrogram):
+        # {
+        #     "core:sample_start": 2008064,
+        #     "core:sample_count": 23552,
+        #     "core:freq_lower_edge": 5726461173.020528,
+        #     "core:freq_upper_edge": 5744538826.979472,
+        #     "core:label": "mini2_video",
+        #     "core:comment": "labelme,yolo"
+        # },
+
+        # "/Users/ltindall/data_test/snr_noise_floor/png/YOLODataset/images/train/gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png": {
+        #     "sample_start": 1572864,
+        #     "sample_count": 524288,
+        #     "nfft": 1024,
+        #     "augmentations": {
+        #         "snr": -10
+        #     },
+        #     "labels": {
+        #         "yolo": [
+        #             "0 0.49951171875 0.146484375 0.8818359375 0.04296875",
+        #             "0 0.50048828125 0.3017578125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.5361328125 0.8818359375 0.044921875",
+        #             "0 0.49951171875 0.6923828125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.927734375 0.8818359375 0.04296875",
+        #             "1 0.45166015625 0.458984375 0.0556640625 0.01953125",
+        #             "1 0.54931640625 0.8505859375 0.0556640625 0.021484375",
+        #             "1 0.54931640625 0.9970703125 0.0556640625 0.001953125"
+        #         ]
+        #     }
+        # },
+
+        if "annotation_labels" not in self.metadata:
+            self.metadata["annotation_labels"] = []
+
+        if annotation["core:label"] not in self.metadata["annotation_labels"]:
+            self.metadata["annotation_labels"].append(annotation["core:label"])
+
+        label_idx = self.metadata["annotation_labels"].index(annotation["core:label"])
+
+        freq_dim = spectrogram["nfft"]
+        time_dim = spectrogram["sample_count"] / freq_dim
+        sample_rate = self.metadata["global"]["core:sample_rate"]
+        freq_center = self.metadata["captures"][0]["core:frequency"]
+        min_freq = freq_center - (sample_rate / 2)
+        max_freq = freq_center + (sample_rate / 2)
+        freq_space = list(np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim)))
+        sample_space = list(
+            np.linspace(
+                start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
+                stop=spectrogram["sample_start"],
+                num=int(time_dim) + 1,
+            )
+        )
+
+        # (freq_space[963]-freq_space[60])/(freq_space[1]-freq_space[0])/1024
+        # (freq_space[963]-freq_space[60])/((max_freq-min_freq)/(1024-1))/1024
+        # width = (annotation["core:freq_upper_edge"] - annotation["core:freq_lower_edge"]) / ((max_freq - min_freq)/(freq_dim-1))/freq_dim
+        width = (
+            freq_space.index(annotation["core:freq_upper_edge"])
+            - freq_space.index(annotation["core:freq_lower_edge"])
+        ) / freq_dim
+
+        # (((freq_space[963]+freq_space[60])/2)-min_freq) / ((max_freq-min_freq)/(1024-1))/1024
+        x_center = (
+            (
+                freq_space.index(annotation["core:freq_upper_edge"])
+                + freq_space.index(annotation["core:freq_lower_edge"])
+            )
+            / 2
+        ) / freq_dim
+
+        # (sample_space.index(2008064)-1 - sample_space.index(2008064+23552)) / 512
+        height = (
+            (sample_space.index(annotation["core:sample_start"]) - 1)
+            - sample_space.index(
+                annotation["core:sample_start"] + annotation["core:sample_count"]
+            )
+        ) / time_dim
+
+        # ((sample_space.index(2008064)-1 + sample_space.index(2008064+23552))/2) / 512
+        y_center = (
+            (
+                (sample_space.index(annotation["core:sample_start"]) - 1)
+                + sample_space.index(
+                    annotation["core:sample_start"] + annotation["core:sample_count"]
+                )
+            )
+            / 2
+        ) / time_dim
+
+        yolo_label = f"{label_idx} {x_center} {y_center} {width} {height}"
+
+        return yolo_label
+
+    def sigmf_to_labelme(self, annotation, spectrogram, spectrogram_filename):
+        # {
+        #     "core:sample_start": 2008064,
+        #     "core:sample_count": 23552,
+        #     "core:freq_lower_edge": 5726461173.020528,
+        #     "core:freq_upper_edge": 5744538826.979472,
+        #     "core:label": "mini2_video",
+        #     "core:comment": "labelme,yolo"
+        # },
+
+        # "/Users/ltindall/data_test/snr_noise_floor/png/YOLODataset/images/train/gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png": {
+        #     "sample_start": 1572864,
+        #     "sample_count": 524288,
+        #     "nfft": 1024,
+        #     "augmentations": {
+        #         "snr": -10
+        #     },
+        #     "labels": {
+        #         "yolo": [
+        #             "0 0.49951171875 0.146484375 0.8818359375 0.04296875",
+        #             "0 0.50048828125 0.3017578125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.5361328125 0.8818359375 0.044921875",
+        #             "0 0.49951171875 0.6923828125 0.8818359375 0.041015625",
+        #             "0 0.50048828125 0.927734375 0.8818359375 0.04296875",
+        #             "1 0.45166015625 0.458984375 0.0556640625 0.01953125",
+        #             "1 0.54931640625 0.8505859375 0.0556640625 0.021484375",
+        #             "1 0.54931640625 0.9970703125 0.0556640625 0.001953125"
+        #         ]
+        #     }
+        # },
+
+        # "/Users/ltindall/data_test/snr_noise_floor/png/gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png": {
+        #     "sample_start": 1572864,
+        #     "sample_count": 524288,
+        #     "nfft": 1024,
+        #     "augmentations": {
+        #         "snr": -10
+        #     },
+        #     "labels": {
+        #         "labelme": {
+        #             "version": "0.3.3",
+        #             "flags": {},
+        #             "shapes": [
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             60,
+        #                             64
+        #                         ],
+        #                         [
+        #                             963,
+        #                             86
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             61,
+        #                             144
+        #                         ],
+        #                         [
+        #                             964,
+        #                             165
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             61,
+        #                             263
+        #                         ],
+        #                         [
+        #                             964,
+        #                             286
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             60,
+        #                             344
+        #                         ],
+        #                         [
+        #                             963,
+        #                             365
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_video",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             61,
+        #                             464
+        #                         ],
+        #                         [
+        #                             964,
+        #                             486
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_telem",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             434,
+        #                             230
+        #                         ],
+        #                         [
+        #                             491,
+        #                             240
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_telem",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             534,
+        #                             430
+        #                         ],
+        #                         [
+        #                             591,
+        #                             441
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 },
+        #                 {
+        #                     "label": "mini2_telem",
+        #                     "text": "",
+        #                     "points": [
+        #                         [
+        #                             534,
+        #                             510
+        #                         ],
+        #                         [
+        #                             591,
+        #                             511
+        #                         ]
+        #                     ],
+        #                     "group_id": null,
+        #                     "shape_type": "rectangle",
+        #                     "flags": {}
+        #                 }
+        #             ],
+        #             "imagePath": "gamutrf_recording_ettus__gain40_1675088974_5735500000Hz_20480000sps.s16.zst_id25_batch25.png",
+        #             "imageData": null,
+        #             "imageHeight": 512,
+        #             "imageWidth": 1024
+        #         }
+        #     }
+        # },
+
+        if "annotation_labels" not in self.metadata:
+            self.metadata["annotation_labels"] = []
+
+        if annotation["core:label"] not in self.metadata["annotation_labels"]:
+            self.metadata["annotation_labels"].append(annotation["core:label"])
+
+        freq_dim = spectrogram["nfft"]
+        time_dim = spectrogram["sample_count"] / freq_dim
+        sample_rate = self.metadata["global"]["core:sample_rate"]
+        freq_center = self.metadata["captures"][0]["core:frequency"]
+        min_freq = freq_center - (sample_rate / 2)
+        max_freq = freq_center + (sample_rate / 2)
+        freq_space = list(np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim)))
+        sample_space = list(
+            np.linspace(
+                start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
+                stop=spectrogram["sample_start"],
+                num=int(time_dim) + 1,
+            )
+        )
+
+        labelme_label = copy.deepcopy(LABELME_DEFAULT)
+
+        labelme_label["imagePath"] = os.path.basename(spectrogram_filename)
+        labelme_label["imageHeight"] = int(time_dim)
+        labelme_label["imageWidth"] = int(freq_dim)
+
+        labelme_shape = copy.deepcopy(LABELME_SHAPE_DEFAULT)
+        labelme_label["shapes"].append(labelme_shape)
+        labelme_label["shapes"][0]["label"] = annotation["core:label"]
+
+        x_min = freq_space.index(annotation["core:freq_lower_edge"])
+        x_max = freq_space.index(annotation["core:freq_upper_edge"])
+
+        y_max = sample_space.index(annotation["core:sample_start"]) - 1
+        y_min = sample_space.index(
+            annotation["core:sample_count"] + annotation["core:sample_start"]
+        )
+
+        points = [[x_min, y_min], [x_max, y_max]]
+        labelme_label["shapes"][0]["points"] = points
+
+        return labelme_label
+
+    def find_matching_spectrogram(self, sample_start, sample_count):
+        """
+        sample_start and sample_count are from annotation
+        """
+        for spectrogram_filename, spectrogram in self.metadata["spectrograms"].items():
+            if (sample_start >= spectrogram["sample_start"]) and (
+                (sample_start + sample_count)
+                <= (spectrogram["sample_start"] + spectrogram["sample_count"])
+            ):
+                return spectrogram_filename
+        return ""
+
+    def convert_all_sigmf_to_yolo(self):
+        # assume existing images and annotations/yolo
+        if not self.metadata["spectrograms"]:
+            raise ValueError("No spectrograms found.")
+
+        if not self.metadata["annotations"]:
+            raise ValueError("No annotations found.")
+
+        new_annotations = 0
+
+        for annotation in self.metadata["annotations"]:
+            sample_start = annotation["core:sample_start"]
+            sample_count = annotation["core:sample_count"]
+            spectrogram_filename = self.find_matching_spectrogram(
+                sample_start, sample_count
+            )
+            if not spectrogram_filename:
+                warnings.warn(
+                    f"Matching spectrogram could not be found for annotation: {annotation}"
+                )
+                continue
+            spectrogram = self.metadata["spectrograms"][spectrogram_filename]
+
+            if "labels" not in spectrogram:
+                spectrogram["labels"] = {}
+            if "yolo" not in spectrogram["labels"]:
+                spectrogram["labels"]["yolo"] = []
+
+            yolo_label = self.sigmf_to_yolo(annotation, spectrogram)
+
+            if yolo_label not in spectrogram["labels"]["yolo"]:
+                spectrogram["labels"]["yolo"].append(yolo_label)
+                new_annotations += 1
+
+        if new_annotations:
+            self.write_sigmf_meta(self.metadata)
+
+    def export_labelme(self, label_outdir, image_outdir=None):
+        # assume existing images and annotations/labelme
+        # will convert annotations if necessary
+        self.convert_all_sigmf_to_labelme()
+
+        Path(label_outdir).mkdir(parents=True, exist_ok=True)
+        if image_outdir:
+            Path(image_outdir).mkdir(parents=True, exist_ok=True)
+
+        new_image = 0
+        for spectrogram_filename, spectrogram in (
+            self.metadata["spectrograms"].copy().items()
+        ):
+            if "labels" not in spectrogram:
+                continue
+            if "labelme" not in spectrogram["labels"]:
+                continue
+
+            basefilename = os.path.splitext(os.path.basename(spectrogram_filename))[0]
+            labelme_filename = f"{basefilename}.json"
+            with open(Path(label_outdir, labelme_filename), "w") as outfile:
+                print(f"Saving {Path(label_outdir, labelme_filename)}\n")
+                outfile.write(json.dumps(spectrogram["labels"]["labelme"], indent=4))
+
+            if image_outdir:
+                # copy image file into new directory
+                new_spectrogram_filename = str(
+                    Path(image_outdir, os.path.basename(spectrogram_filename))
+                )
+                try:
+                    shutil.copy2(spectrogram_filename, new_spectrogram_filename)
+                    # copy entry in metadata
+                    self.metadata["spectrograms"][
+                        new_spectrogram_filename
+                    ] = spectrogram
+                    new_image += 1
+                except shutil.SameFileError:
+                    pass
+
+        if new_image:
+            self.write_sigmf_meta(self.metadata)
+
+    def export_yolo(self, label_outdir, image_outdir=None):
+        self.convert_all_sigmf_to_yolo()
+
+        Path(label_outdir).mkdir(parents=True, exist_ok=True)
+        if image_outdir:
+            Path(image_outdir).mkdir(parents=True, exist_ok=True)
+
+        new_image = 0
+        for spectrogram_filename, spectrogram in (
+            self.metadata["spectrograms"].copy().items()
+        ):
+            if "labels" not in spectrogram:
+                continue
+            if "yolo" not in spectrogram["labels"]:
+                continue
+
+            basefilename = os.path.splitext(os.path.basename(spectrogram_filename))[0]
+            yolo_filename = f"{basefilename}.txt"
+            with open(Path(label_outdir, yolo_filename), "w") as f:
+                for annotation in spectrogram["labels"]["yolo"]:
+                    f.write(f"{annotation}\n")
+                print(f"Saving {Path(label_outdir, yolo_filename)}\n")
+
+            if image_outdir:
+                # copy image file into new directory
+                new_spectrogram_filename = str(
+                    Path(image_outdir, os.path.basename(spectrogram_filename))
+                )
+                try:
+                    shutil.copy2(spectrogram_filename, new_spectrogram_filename)
+                    # copy entry in metadata
+                    self.metadata["spectrograms"][
+                        new_spectrogram_filename
+                    ] = spectrogram
+                    new_image += 1
+                except shutil.SameFileError:
+                    pass
+
+        if new_image:
+            self.write_sigmf_meta(self.metadata)
+
+    def convert_all_sigmf_to_labelme(self):
+        # assume existing images and annotations/labelme
+        if not self.metadata["spectrograms"]:
+            raise ValueError("No spectrograms found.")
+
+        if not self.metadata["annotations"]:
+            raise ValueError("No annotations found.")
+
+        new_annotations = 0
+
+        for annotation in self.metadata["annotations"]:
+            sample_start = annotation["core:sample_start"]
+            sample_count = annotation["core:sample_count"]
+            spectrogram_filename = self.find_matching_spectrogram(
+                sample_start, sample_count
+            )
+            if not spectrogram_filename:
+                warnings.warn(
+                    f"Matching spectrogram could not be found for annotation: {annotation}"
+                )
+                continue
+            spectrogram = self.metadata["spectrograms"][spectrogram_filename]
+
+            if "labels" not in spectrogram:
+                spectrogram["labels"] = {}
+            if "labelme" not in spectrogram["labels"]:
+                spectrogram["labels"]["labelme"] = {}
+
+            labelme_label = self.sigmf_to_labelme(
+                annotation, spectrogram, spectrogram_filename
+            )
+
+            if not spectrogram["labels"]["labelme"]:
+                spectrogram["labels"]["labelme"] = labelme_label
+                new_annotations += 1
+            elif (
+                labelme_label["shapes"][0]
+                not in spectrogram["labels"]["labelme"]["shapes"]
+            ):
+                spectrogram["labels"]["labelme"]["shapes"].append(
+                    labelme_label["shapes"][0]
+                )
+                new_annotations += 1
+
+        if new_annotations:
+            self.write_sigmf_meta(self.metadata)
 
     def labelme_to_sigmf(self, labelme_json, img_filename):
         spectrogram_metadata = self.metadata["spectrograms"][img_filename]
@@ -144,7 +805,7 @@ class Data:
 
         new_annotations = 0
         for labelme_annotation in labelme_json["shapes"]:
-            sigmf_annotation = SIGMF_ANNOTATION_DEFAULT.copy()
+            sigmf_annotation = copy.deepcopy(SIGMF_ANNOTATION_DEFAULT)
 
             sigmf_annotation["core:sample_start"] = int(
                 sample_space[int(labelme_annotation["points"][1][1]) + 1]
@@ -202,7 +863,7 @@ class Data:
 
         new_annotations = 0
         for line in yolo_txt:
-            sigmf_annotation = SIGMF_ANNOTATION_DEFAULT.copy()
+            sigmf_annotation = copy.deepcopy(SIGMF_ANNOTATION_DEFAULT)
 
             values = line.split()
 
@@ -247,6 +908,19 @@ class Data:
         if new_annotations:
             self.write_sigmf_meta(self.metadata)
 
+    def import_image(self, image_filepath, spectrogram_metadata, overwrite=False):
+        # if image not in sigmf["spectrograms"] or current metadata is not a subset
+        if (
+            overwrite
+            or (image_filepath not in self.metadata["spectrograms"])
+            or not (
+                spectrogram_metadata.items()
+                <= self.metadata["spectrograms"][image_filepath].items()
+            )
+        ):
+            self.metadata["spectrograms"][image_filepath] = spectrogram_metadata
+            self.write_sigmf_meta(self.metadata)
+
 
 class DtypeEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -270,12 +944,13 @@ def images_to_sigmf(metadata_getter):
         data_object = Data(sample_filepath)
 
         # if image not in sigmf["spectrograms"] or current metadata is not a subset
-        if (image_filepath not in data_object.metadata["spectrograms"]) or not (
-            spectrogram_metadata.items()
-            <= data_object.metadata["spectrograms"][image_filepath].items()
-        ):
-            data_object.metadata["spectrograms"][image_filepath] = spectrogram_metadata
-            data_object.write_sigmf_meta(data_object.metadata)
+        # if (image_filepath not in data_object.metadata["spectrograms"]) or not (
+        #     spectrogram_metadata.items()
+        #     <= data_object.metadata["spectrograms"][image_filepath].items()
+        # ):
+        #     data_object.metadata["spectrograms"][image_filepath] = spectrogram_metadata
+        #     data_object.write_sigmf_meta(data_object.metadata)
+        data_object.import_image(image_filepath, spectrogram_metadata)
 
 
 def yield_image_metadata_from_filename(images_directory, samples_directory):
@@ -317,7 +992,7 @@ def yield_image_metadata_from_filename(images_directory, samples_directory):
         # Get start sample for image
         sample_start = int(sample_count * int(reg.match(image_filename).group(3)))
 
-        spectrogram_metadata = SPECTROGRAM_METADATA_DEFAULT.copy()
+        spectrogram_metadata = copy.deepcopy(SPECTROGRAM_METADATA_DEFAULT)
         spectrogram_metadata["sample_start"] = sample_start
         spectrogram_metadata["sample_count"] = sample_count
         spectrogram_metadata["nfft"] = nfft
@@ -420,6 +1095,7 @@ def yield_label_metadata(
             label_filename, metadata_directory
         )
         image_filename = f"{os.path.splitext(label_filename)[0]}.png"
+        sample_filename = os.path.basename(sample_filename)
 
         yield (
             str(Path(image_directory, image_filename)),
@@ -449,6 +1125,9 @@ def labels_to_sigmf(metadata_getter, label_type, yolo_dataset_yaml=None):
             with open(yolo_dataset_yaml, "r") as stream:
                 dataset_yaml = yaml.safe_load(stream)
                 class_labels = dataset_yaml["names"]
+                if "annotation_labels" not in data_object.metadata:
+                    data_object.metadata["annotation_labels"] = class_labels
+                    data_object.write_sigmf_meta(data_object.metadata)
 
         # Checks if spectrogram_metadata is a subset of any spectrogram in SigMF
         if (image_filepath in data_object.metadata["spectrograms"]) and (
@@ -493,23 +1172,14 @@ if __name__ == "__main__":
     #     )
     # )
 
-    # directory = "/Users/ltindall/data_test/snr_noise_floor/"
-    # label_ext = ".txt"
-    # label_type = "yolo"
-    # label_directory = directory + "png/YOLODataset/labels/train/"
-    # image_directory = directory + "png/YOLODataset/images/train/"
-    # samples_directory = directory
-    # metadata_directory = directory + "metadata/"
-    # yolo_dataset_yaml = directory + "png/YOLODataset/dataset.yaml"
-    # labels_to_sigmf(yield_label_metadata(label_ext,label_directory,image_directory,samples_directory,metadata_directory), label_type, yolo_dataset_yaml)
-
     directory = "/Users/ltindall/data_test/snr_noise_floor/"
-    label_ext = ".json"
-    label_type = "labelme"
-    label_directory = directory + "png/"
-    image_directory = directory + "png/"
+    label_ext = ".txt"
+    label_type = "yolo"
+    label_directory = directory + "png/YOLODataset/labels/train/"
+    image_directory = directory + "png/YOLODataset/images/train/"
     samples_directory = directory
     metadata_directory = directory + "metadata/"
+    yolo_dataset_yaml = directory + "png/YOLODataset/dataset.yaml"
     labels_to_sigmf(
         yield_label_metadata(
             label_ext,
@@ -519,4 +1189,23 @@ if __name__ == "__main__":
             metadata_directory,
         ),
         label_type,
+        yolo_dataset_yaml,
     )
+
+    # directory = "/Users/ltindall/data_test/snr_noise_floor/"
+    # label_ext = ".json"
+    # label_type = "labelme"
+    # label_directory = directory + "png/"
+    # image_directory = directory + "png/"
+    # samples_directory = directory
+    # metadata_directory = directory + "metadata/"
+    # labels_to_sigmf(
+    #     yield_label_metadata(
+    #         label_ext,
+    #         label_directory,
+    #         image_directory,
+    #         samples_directory,
+    #         metadata_directory,
+    #     ),
+    #     label_type,
+    # )
