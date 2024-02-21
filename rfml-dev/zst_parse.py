@@ -23,7 +23,6 @@ SIGMF_DTYPES = {
 
 
 def parse_zst_filename(filename):
-
     match = SAMPLE_FILENAME_RE.match(filename)
     nfft = None
     try:
@@ -45,18 +44,17 @@ def parse_zst_filename(filename):
         sample_dtype = np.dtype([("i", sample_dtype), ("q", sample_dtype)])
         sample_bits = sample_dtype[0].itemsize * 8
         sample_len = sample_dtype[0].itemsize * 2
-    
-    
+
     file_info = {
         "filename": filename,
         "freq_center": freq_center,
         "sample_rate": sample_rate,
         "sample_dtype": sample_dtype,
-        "sample_len": sample_len,
+        "sample_len": sample_len,  # number of bytes
         "sample_type": sample_type,
         "sample_bits": sample_bits,
         "nfft": nfft,
         "timestamp": timestamp,
-        "sigmf_datatype": sigmf_datatype
+        "sigmf_datatype": sigmf_datatype,
     }
     return file_info

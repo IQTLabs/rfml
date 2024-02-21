@@ -1,15 +1,22 @@
 import os
 import re
+import gzip
+import bz2
+import zstandard
 import json
 import numpy as np
 import shutil
 import warnings
 import yaml
+import matplotlib.pyplot as plt
 
 from datetime import datetime, timezone
 from pathlib import Path
+from PIL import Image
+
 
 from zst_parse import parse_zst_filename
+from spectrogram import spectrogram, spectrogram_cmap
 
 SIGMF_META_DEFAULT = {
     "global": {  # https://github.com/sigmf/SigMF/blob/sigmf-v1.x/sigmf-spec.md#global-object
@@ -42,6 +49,7 @@ SPECTROGRAM_METADATA_DEFAULT = {
     "sample_start": None,
     "sample_count": None,
     "nfft": None,
+    "augmentations": None,
 }
 LABELME_SHAPE_DEFAULT = {
     "label": None,
@@ -59,6 +67,17 @@ LABELME_DEFAULT = {
     "imageData": None,
     "imageHeight": None,
     "imageWidth": None,
+}
+
+SIGMF_TO_NP = {
+    "ci8": "<i1",
+    "ci16_le": "<i2",
+    "ci32_le": "<i4",
+    "cu8": "<u1",
+    "cu16_le": "<u2",
+    "cu32_le": "<u4",
+    "cf32_le": "<f4",
+    "cf64_le": "<f8",
 }
 
 
@@ -103,6 +122,69 @@ class Data:
 
         self.metadata = json.load(open(self.sigmf_meta_filename))
 
+    def get_sample_reader(self):
+        # nosemgrep:github.workflows.config.useless-inner-function
+        def bz2_reader(x):
+            return bz2.open(x, "rb")
+
+        # nosemgrep:github.workflows.config.useless-inner-function
+        def gzip_reader(x):
+            return gzip.open(x, "rb")
+
+        # nosemgrep:github.workflows.config.useless-inner-function
+        def zst_reader(x):
+            return zstandard.ZstdDecompressor().stream_reader(
+                open(x, "rb"), read_across_frames=True
+            )
+
+        def default_reader(x):
+            return open(x, "rb")
+
+        if self.data_filename.endswith(".bz2"):
+            return bz2_reader
+        if self.data_filename.endswith(".gz"):
+            return gzip_reader
+        if self.data_filename.endswith(".zst"):
+            return zst_reader
+
+        return default_reader
+
+    def get_samples(self, n_seek_samples=0, n_samples=None):
+        reader = self.get_sample_reader()
+
+        np_dtype = SIGMF_TO_NP[self.metadata["global"]["core:datatype"]]
+        sample_dtype = np.dtype([("i", np_dtype), ("q", np_dtype)])
+
+        with reader(self.data_filename) as infile:
+            if n_seek_samples:
+                infile.seek(int(n_seek_samples * sample_dtype.itemsize))
+
+            if n_samples:
+                sample_buffer = infile.read(int(n_samples * sample_dtype.itemsize))
+            else:
+                sample_buffer = infile.read()
+
+            n_buffered_samples = int(len(sample_buffer) / sample_dtype.itemsize)
+            if len(sample_buffer) % sample_dtype.itemsize != 0:
+                raise ValueError(
+                    f"Size mismatch. Sample bytes are not a multiple of sample dtype size."
+                )
+
+            if n_buffered_samples == 0:
+                # raise ValueError(f"No samples could be read from {self.data_filename}.")
+                # warnings.warn(f"{n_seek_samples} samples read. No more samples could be read from {self.data_filename}.")
+                # reached end of file
+                return None
+            if n_samples and n_buffered_samples != n_samples:
+                warnings.warn(
+                    f"Could only read {n_buffered_samples}/{n_samples} samples from {self.data_filename}."
+                )
+                return None
+            x1d = np.frombuffer(
+                sample_buffer, dtype=sample_dtype, count=n_buffered_samples
+            )
+            return x1d["i"] + np.csingle(1j) * x1d["q"]
+
     def write_sigmf_meta(self, sigmf_meta):
         with open(self.sigmf_meta_filename, "w") as outfile:
             print(f"Saving {self.sigmf_meta_filename}\n")
@@ -125,13 +207,58 @@ class Data:
 
         self.write_sigmf_meta(sigmf_meta)
 
-    def generate_spectrograms(self):
+    def generate_spectrograms(
+        self,
+        n_samples,
+        n_fft,
+        image_outdir=None,
+        n_overlap=0,
+        cmap=plt.get_cmap("turbo"),
+        overwrite=False,
+    ):
         # will update sigmf-meta with image metadata
-        raise NotImplementedError
 
-    def sigmf_to_labelme(self):
-        # assume existing images and annotations
-        raise NotImplementedError
+        if image_outdir is None:
+            image_outdir = f"{self.data_filename}_images"
+        image_outdir = Path(image_outdir)
+        image_outdir.mkdir(parents=True, exist_ok=True)
+
+        n_seek_samples = 0
+        while True:
+            image_filename = (
+                f"{os.path.basename(self.data_filename)}_{n_seek_samples}.png"
+            )
+            image_filepath = str(Path(image_outdir, image_filename))
+
+            if not overwrite and (image_filepath in self.metadata["spectrograms"]):
+                n_seek_samples += n_samples
+                continue
+
+            samples = self.get_samples(
+                n_seek_samples=n_seek_samples, n_samples=n_samples
+            )
+            if samples is None:
+                break
+
+            spectrogram_data, spectrogram_raw = spectrogram(
+                samples,
+                self.metadata["global"]["core:sample_rate"],
+                n_fft,
+                n_overlap,
+            )
+            spectrogram_color = spectrogram_cmap(spectrogram_data, cmap)
+
+            spectrogram_image = Image.fromarray(spectrogram_color)
+            spectrogram_image.save(image_filepath)
+
+            spectrogram_metadata = SPECTROGRAM_METADATA_DEFAULT.copy()
+            spectrogram_metadata["sample_start"] = n_seek_samples
+            spectrogram_metadata["sample_count"] = n_samples
+            spectrogram_metadata["nfft"] = n_fft
+
+            self.import_image(image_filepath, spectrogram_metadata, overwrite=overwrite)
+
+            n_seek_samples += n_samples
 
     def sigmf_to_yolo(self, annotation, spectrogram):
         # {
@@ -752,6 +879,19 @@ class Data:
         if new_annotations:
             self.write_sigmf_meta(self.metadata)
 
+    def import_image(self, image_filepath, spectrogram_metadata, overwrite=False):
+        # if image not in sigmf["spectrograms"] or current metadata is not a subset
+        if (
+            overwrite
+            or (image_filepath not in self.metadata["spectrograms"])
+            or not (
+                spectrogram_metadata.items()
+                <= self.metadata["spectrograms"][image_filepath].items()
+            )
+        ):
+            self.metadata["spectrograms"][image_filepath] = spectrogram_metadata
+            self.write_sigmf_meta(self.metadata)
+
 
 class DtypeEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -775,12 +915,13 @@ def images_to_sigmf(metadata_getter):
         data_object = Data(sample_filepath)
 
         # if image not in sigmf["spectrograms"] or current metadata is not a subset
-        if (image_filepath not in data_object.metadata["spectrograms"]) or not (
-            spectrogram_metadata.items()
-            <= data_object.metadata["spectrograms"][image_filepath].items()
-        ):
-            data_object.metadata["spectrograms"][image_filepath] = spectrogram_metadata
-            data_object.write_sigmf_meta(data_object.metadata)
+        # if (image_filepath not in data_object.metadata["spectrograms"]) or not (
+        #     spectrogram_metadata.items()
+        #     <= data_object.metadata["spectrograms"][image_filepath].items()
+        # ):
+        #     data_object.metadata["spectrograms"][image_filepath] = spectrogram_metadata
+        #     data_object.write_sigmf_meta(data_object.metadata)
+        data_object.import_image(image_filepath, spectrogram_metadata)
 
 
 def yield_image_metadata_from_filename(images_directory, samples_directory):
