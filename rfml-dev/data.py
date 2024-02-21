@@ -1,6 +1,7 @@
 import os
 import re
 import gzip
+import copy
 import bz2
 import zstandard
 import json
@@ -59,6 +60,7 @@ LABELME_SHAPE_DEFAULT = {
     "shape_type": "rectangle",
     "flags": {},
 }
+
 LABELME_DEFAULT = {
     "version": "0.3.3",
     "flags": {},
@@ -192,7 +194,7 @@ class Data:
 
     def zst_to_sigmf_meta(self):
         file_info = parse_zst_filename(self.data_filename)
-        sigmf_meta = SIGMF_META_DEFAULT.copy()
+        sigmf_meta = copy.deepcopy(SIGMF_META_DEFAULT)
 
         sigmf_meta["global"]["core:dataset"] = self.data_filename
         sigmf_meta["global"]["core:datatype"] = file_info["sigmf_datatype"]
@@ -251,7 +253,7 @@ class Data:
             spectrogram_image = Image.fromarray(spectrogram_color)
             spectrogram_image.save(image_filepath)
 
-            spectrogram_metadata = SPECTROGRAM_METADATA_DEFAULT.copy()
+            spectrogram_metadata = copy.deepcopy(SPECTROGRAM_METADATA_DEFAULT)
             spectrogram_metadata["sample_start"] = n_seek_samples
             spectrogram_metadata["sample_count"] = n_samples
             spectrogram_metadata["nfft"] = n_fft
@@ -306,10 +308,12 @@ class Data:
         min_freq = freq_center - (sample_rate / 2)
         max_freq = freq_center + (sample_rate / 2)
         freq_space = list(np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim)))
-        sample_space = np.linspace(
-            start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
-            stop=spectrogram["sample_start"],
-            num=int(time_dim) + 1,
+        sample_space = list(
+            np.linspace(
+                start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
+                stop=spectrogram["sample_start"],
+                num=int(time_dim) + 1,
+            )
         )
 
         # (freq_space[963]-freq_space[60])/(freq_space[1]-freq_space[0])/1024
@@ -553,19 +557,22 @@ class Data:
         min_freq = freq_center - (sample_rate / 2)
         max_freq = freq_center + (sample_rate / 2)
         freq_space = list(np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim)))
-        sample_space = np.linspace(
-            start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
-            stop=spectrogram["sample_start"],
-            num=int(time_dim) + 1,
+        sample_space = list(
+            np.linspace(
+                start=(spectrogram["sample_start"] + spectrogram["sample_count"]),
+                stop=spectrogram["sample_start"],
+                num=int(time_dim) + 1,
+            )
         )
 
-        labelme_label = LABELME_DEFAULT.copy()
+        labelme_label = copy.deepcopy(LABELME_DEFAULT)
+
         labelme_label["imagePath"] = os.path.basename(spectrogram_filename)
         labelme_label["imageHeight"] = int(time_dim)
         labelme_label["imageWidth"] = int(freq_dim)
 
-        labelme_label["shapes"].append(LABELME_SHAPE_DEFAULT.copy())
-
+        labelme_shape = copy.deepcopy(LABELME_SHAPE_DEFAULT)
+        labelme_label["shapes"].append(labelme_shape)
         labelme_label["shapes"][0]["label"] = annotation["core:label"]
 
         x_min = freq_space.index(annotation["core:freq_lower_edge"])
@@ -585,7 +592,7 @@ class Data:
         """
         sample_start and sample_count are from annotation
         """
-        for spectrogram_filename, spectrogram in self.metadata["spectrograms"]:
+        for spectrogram_filename, spectrogram in self.metadata["spectrograms"].items():
             if (sample_start >= spectrogram["sample_start"]) and (
                 (sample_start + sample_count)
                 <= (spectrogram["sample_start"] + spectrogram["sample_count"])
@@ -635,8 +642,14 @@ class Data:
         # will convert annotations if necessary
         self.convert_all_sigmf_to_labelme()
 
+        Path(label_outdir).mkdir(parents=True, exist_ok=True)
+        if image_outdir:
+            Path(image_outdir).mkdir(parents=True, exist_ok=True)
+
         new_image = 0
-        for spectrogram_filename, spectrogram in self.metadata["spectrograms"]:
+        for spectrogram_filename, spectrogram in (
+            self.metadata["spectrograms"].copy().items()
+        ):
             if "labels" not in spectrogram:
                 continue
             if "labelme" not in spectrogram["labels"]:
@@ -650,13 +663,18 @@ class Data:
 
             if image_outdir:
                 # copy image file into new directory
-                new_spectrogram_filename = Path(
-                    image_outdir, os.path.basename(spectrogram_filename)
+                new_spectrogram_filename = str(
+                    Path(image_outdir, os.path.basename(spectrogram_filename))
                 )
-                shutil.copy2(spectrogram_filename, new_spectrogram_filename)
-                # copy entry in metadata
-                self.metadata["spectrograms"][new_spectrogram_filename] = spectrogram
-                new_image += 1
+                try:
+                    shutil.copy2(spectrogram_filename, new_spectrogram_filename)
+                    # copy entry in metadata
+                    self.metadata["spectrograms"][
+                        new_spectrogram_filename
+                    ] = spectrogram
+                    new_image += 1
+                except shutil.SameFileError:
+                    pass
 
         if new_image:
             self.write_sigmf_meta(self.metadata)
@@ -664,8 +682,14 @@ class Data:
     def export_yolo(self, label_outdir, image_outdir=None):
         self.convert_all_sigmf_to_yolo()
 
+        Path(label_outdir).mkdir(parents=True, exist_ok=True)
+        if image_outdir:
+            Path(image_outdir).mkdir(parents=True, exist_ok=True)
+
         new_image = 0
-        for spectrogram_filename, spectrogram in self.metadata["spectrograms"]:
+        for spectrogram_filename, spectrogram in (
+            self.metadata["spectrograms"].copy().items()
+        ):
             if "labels" not in spectrogram:
                 continue
             if "yolo" not in spectrogram["labels"]:
@@ -680,13 +704,18 @@ class Data:
 
             if image_outdir:
                 # copy image file into new directory
-                new_spectrogram_filename = Path(
-                    image_outdir, os.path.basename(spectrogram_filename)
+                new_spectrogram_filename = str(
+                    Path(image_outdir, os.path.basename(spectrogram_filename))
                 )
-                shutil.copy2(spectrogram_filename, new_spectrogram_filename)
-                # copy entry in metadata
-                self.metadata["spectrograms"][new_spectrogram_filename] = spectrogram
-                new_image += 1
+                try:
+                    shutil.copy2(spectrogram_filename, new_spectrogram_filename)
+                    # copy entry in metadata
+                    self.metadata["spectrograms"][
+                        new_spectrogram_filename
+                    ] = spectrogram
+                    new_image += 1
+                except shutil.SameFileError:
+                    pass
 
         if new_image:
             self.write_sigmf_meta(self.metadata)
@@ -776,7 +805,7 @@ class Data:
 
         new_annotations = 0
         for labelme_annotation in labelme_json["shapes"]:
-            sigmf_annotation = SIGMF_ANNOTATION_DEFAULT.copy()
+            sigmf_annotation = copy.deepcopy(SIGMF_ANNOTATION_DEFAULT)
 
             sigmf_annotation["core:sample_start"] = int(
                 sample_space[int(labelme_annotation["points"][1][1]) + 1]
@@ -834,7 +863,7 @@ class Data:
 
         new_annotations = 0
         for line in yolo_txt:
-            sigmf_annotation = SIGMF_ANNOTATION_DEFAULT.copy()
+            sigmf_annotation = copy.deepcopy(SIGMF_ANNOTATION_DEFAULT)
 
             values = line.split()
 
@@ -963,7 +992,7 @@ def yield_image_metadata_from_filename(images_directory, samples_directory):
         # Get start sample for image
         sample_start = int(sample_count * int(reg.match(image_filename).group(3)))
 
-        spectrogram_metadata = SPECTROGRAM_METADATA_DEFAULT.copy()
+        spectrogram_metadata = copy.deepcopy(SPECTROGRAM_METADATA_DEFAULT)
         spectrogram_metadata["sample_start"] = sample_start
         spectrogram_metadata["sample_count"] = sample_count
         spectrogram_metadata["nfft"] = nfft
@@ -1066,6 +1095,7 @@ def yield_label_metadata(
             label_filename, metadata_directory
         )
         image_filename = f"{os.path.splitext(label_filename)[0]}.png"
+        sample_filename = os.path.basename(sample_filename)
 
         yield (
             str(Path(image_directory, image_filename)),
