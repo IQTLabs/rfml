@@ -3,6 +3,8 @@ import argparse
 import numpy as np
 import cv2 as cv
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 from skimage.filters import threshold_multiotsu
 
@@ -23,29 +25,94 @@ def dji_yolo_labeller(rect):
     return 0
 
 
+def rect_filter_dji(rects, shape):
+    max_width_video = 905
+    max_height_video = 105
+    max_width_telem = 60
+    max_height_telem = 12
+
+    x_correction = -2
+    y_correction = -2
+    good_rects = []
+
+    # if len(rects) > 15:
+    #     rects = []
+
+    for rect in rects:
+        x, y, w, h = rect
+
+        for max_width in [max_width_video, max_width_telem]:
+            # print(f"{w=}, {max_width=}")
+            if (w < 0.5 * max_width) or (w > 3.5 * max_width):
+                continue
+
+            # if w < (0.7 * max_width) and w > (0.3 * max_width):
+            # centering
+            center = x + (0.5 * w)
+            x = int(max(center - (0.5 * max_width), 0))
+            w = int(min(center + (0.5 * max_width) - x, shape[1] - 1 - x))
+
+            # if w * h < (0.5 * max_width * max_height):
+            #     continue
+            x += x_correction
+            y += y_correction
+            good_rects.append([x, y, w, h])
+            break
+    # print(f"{good_rects=}")
+    return good_rects
+
+
 dji_args = {
     "invert": True,
-    "pre_threshold": 1,
+    "pre_threshold": -1,
     "histogram_equalization": False,
     "pre_thresh_morphology": [],
     "kernel_open": cv.getStructuringElement(
         cv.MORPH_RECT,
-        (2, 2),  # (10,10)
+        (4, 4),  # (10,10)
     ),  # np.ones((3, 3), np.uint8),
     "kernel_close": cv.getStructuringElement(
-        cv.MORPH_RECT, (24, 12)
+        cv.MORPH_RECT, (4, 1)
     ),  # np.ones((15, 15), np.uint8),
-    "threshold_op": 0,
-    "post_thresh_morphology": [],
+    "threshold_op": "otsu",
+    "post_thresh_morphology": [
+        {
+            "morph_func": cv.MORPH_CLOSE,
+            "kernel": cv.getStructuringElement(cv.MORPH_RECT, (20, 1)),
+        },
+    ],
     "bilateral_kernel_size": 8,
-    "group_horizontal": False,
+    "group_horizontal": True,
     "area_threshold": 0.7,
     "yolo_label": dji_yolo_labeller,
     "vertical": False,
     "dc_block": None,
     "horizontal_adjust": 0,
-    "custom_rect_filter": None,
+    "custom_rect_filter": rect_filter_dji,
 }
+# dji_args = {
+#     "invert": True,
+#     "pre_threshold": 1,
+#     "histogram_equalization": False,
+#     "pre_thresh_morphology": [],
+#     "kernel_open": cv.getStructuringElement(
+#         cv.MORPH_RECT,
+#         (2, 2),  # (10,10)
+#     ),  # np.ones((3, 3), np.uint8),
+#     "kernel_close": cv.getStructuringElement(
+#         cv.MORPH_RECT, (24, 12)
+#     ),  # np.ones((15, 15), np.uint8),
+#     "threshold_op": 0,
+#     "post_thresh_morphology": [],
+#     "bilateral_kernel_size": 8,
+#     "group_horizontal": False,
+#     "area_threshold": 0.7,
+#     "yolo_label": dji_yolo_labeller,
+#     "vertical": False,
+#     "dc_block": None,
+#     "horizontal_adjust": 0,
+#     "custom_rect_filter": None,
+# }
 
 
 def rect_filter_msk(rects, shape):
@@ -137,7 +204,6 @@ fhss_css_args = {
     "pre_threshold": 0,
     "histogram_equalization": False,
     "pre_thresh_morphology": [
-
         {
             "morph_func": cv.MORPH_OPEN,
             "kernel": cv.getStructuringElement(cv.MORPH_RECT, (3, 3)),
@@ -150,10 +216,8 @@ fhss_css_args = {
     "kernel_open": cv.getStructuringElement(
         cv.MORPH_RECT,
         (12, 12),  # (10,10)
-    ),  
-    "kernel_close": cv.getStructuringElement(
-        cv.MORPH_RECT, (15, 15)
-    ), 
+    ),
+    "kernel_close": cv.getStructuringElement(cv.MORPH_RECT, (15, 15)),
     "threshold_op": 0,
     "post_thresh_morphology": [],
     "bilateral_kernel_size": 8,
@@ -267,10 +331,9 @@ default_args = {
     "horizontal_adjust": None,
     "custom_rect_filter": None,
 }
-debug = True
 
 
-def multi_otsu(imgray):
+def multi_otsu(imgray, debug):
     # Applying multi-Otsu threshold for the default value, generating
     # three classes.
     thresholds = threshold_multiotsu(imgray)
@@ -334,7 +397,7 @@ def group_horizontal_rects(rects):
     return rects
 
 
-def cv_plot(img, title):
+def cv_plot(img, title, debug):
     if debug:
         cv.imshow(title, img)
         k = cv.waitKey(0)
@@ -344,24 +407,26 @@ def cv_plot(img, title):
         cv.destroyAllWindows()
 
 
-def label(
+def auto_label(
     filename,
-    invert,
-    kernel_open,
-    kernel_close,
-    bilateral_kernel_size,
-    group_horizontal,
-    area_threshold,
-    yolo_label,
-    vertical,
-    dc_block,
-    horizontal_adjust,
-    pre_threshold,
-    threshold_op,
-    post_thresh_morphology,
-    histogram_equalization,
-    pre_thresh_morphology,
-    custom_rect_filter,
+    label_outdir=None,
+    debug=False,
+    invert=None,
+    kernel_open=None,
+    kernel_close=None,
+    bilateral_kernel_size=None,
+    group_horizontal=None,
+    area_threshold=None,
+    yolo_label=None,
+    vertical=None,
+    dc_block=None,
+    horizontal_adjust=None,
+    pre_threshold=None,
+    threshold_op=None,
+    post_thresh_morphology=None,
+    histogram_equalization=None,
+    pre_thresh_morphology=None,
+    custom_rect_filter=None,
 ):
     print(f"Processing {filename}")
     if debug:
@@ -372,25 +437,25 @@ def label(
 
     original_img = img.copy()
     imgray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    cv_plot(np.hstack((img, cv.cvtColor(imgray, cv.COLOR_GRAY2RGB))), "imgray")
+    cv_plot(np.hstack((img, cv.cvtColor(imgray, cv.COLOR_GRAY2RGB))), "imgray", debug)
 
     # invert image (depends on colormap)
     if invert:
         imgray_new = cv.bitwise_not(imgray)
-        cv_plot(np.hstack((imgray, imgray_new)), "imgray invert")
+        cv_plot(np.hstack((imgray, imgray_new)), "imgray invert", debug)
         imgray = imgray_new
     imgray_original = imgray.copy()
 
     # display multi otsu thresholding (informational)
     if debug:
-        multi_thresh = multi_otsu(imgray)
+        multi_thresh = multi_otsu(imgray, debug)
 
     if pre_threshold >= 0:
-        multi_thresh = multi_otsu(imgray)
+        multi_thresh = multi_otsu(imgray, debug)
         ret, imgray_new = cv.threshold(
             imgray, multi_thresh[pre_threshold], 255, cv.THRESH_TOZERO
         )
-        cv_plot(np.hstack((imgray, imgray_new)), "thresh trunc")
+        cv_plot(np.hstack((imgray, imgray_new)), "thresh trunc", debug)
         imgray = imgray_new
 
     if histogram_equalization:
@@ -399,7 +464,7 @@ def label(
 
         clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         imgray_new = clahe.apply(imgray)
-        cv_plot(np.hstack((imgray, imgray_new)), "histogram clahe")
+        cv_plot(np.hstack((imgray, imgray_new)), "histogram clahe", debug)
         imgray = imgray_new
 
     for morphology in pre_thresh_morphology:
@@ -411,12 +476,15 @@ def label(
             cv_plot(
                 np.hstack((imgray, imgray_new)),
                 f"pre_thresh_morphology: {morph_func.__name__}",
+                debug,
             )
             imgray = imgray_new
         elif morph_func in [cv.MORPH_OPEN, cv.MORPH_CLOSE]:
             imgray_new = cv.morphologyEx(imgray, morph_func, kernel, **kwargs)
             cv_plot(
-                np.hstack((imgray, imgray_new)), f"pre_thresh_morphology: {morph_func}"
+                np.hstack((imgray, imgray_new)),
+                f"pre_thresh_morphology: {morph_func}",
+                debug,
             )
             imgray = imgray_new
         else:
@@ -431,12 +499,12 @@ def label(
     # https://docs.opencv.org/3.4/d3/dbe/tutorial_opening_closing_hats.html
     # kernel_open = np.ones((3, 3), np.uint8)
     imgray_new = cv.morphologyEx(imgray, cv.MORPH_OPEN, kernel_open)
-    cv_plot(np.hstack((imgray, imgray_new)), "open morph")
+    cv_plot(np.hstack((imgray, imgray_new)), "open morph", debug)
     imgray = imgray_new
 
     # kernel_close = np.ones((15, 15), np.uint8)
     imgray_new = cv.morphologyEx(imgray, cv.MORPH_CLOSE, kernel_close)
-    cv_plot(np.hstack((imgray, imgray_new)), "close morph")
+    cv_plot(np.hstack((imgray, imgray_new)), "close morph", debug)
     imgray = imgray_new
 
     # bilateral smoothing
@@ -448,7 +516,7 @@ def label(
         bilateral_kernel_size * 2,
         bilateral_kernel_size / 2,
     )
-    cv_plot(np.hstack((imgray, imgray_new)), "bilateral smoothing")
+    cv_plot(np.hstack((imgray, imgray_new)), "bilateral smoothing", debug)
     imgray = imgray_new
 
     # thresholding (adaptive gaussian)
@@ -458,18 +526,18 @@ def label(
     # cv.destroyAllWindows()
 
     if debug:
-        multi_thresh = multi_otsu(imgray)
+        multi_thresh = multi_otsu(imgray, debug)
 
     if threshold_op == "otsu":
         # thresholding (otsu)
         ret, thresh = cv.threshold(imgray, 0, 255, cv.THRESH_OTSU)
-        cv_plot(np.hstack((imgray, thresh)), "otsu threshold")
+        cv_plot(np.hstack((imgray, thresh)), "otsu threshold", debug)
     elif isinstance(threshold_op, int):
-        multi_thresh = multi_otsu(imgray)
+        multi_thresh = multi_otsu(imgray, debug)
         ret, thresh = cv.threshold(
             imgray, multi_thresh[threshold_op], 255, cv.THRESH_TOZERO
         )
-        cv_plot(np.hstack((imgray, thresh)), f"thresh trunc {threshold_op}")
+        cv_plot(np.hstack((imgray, thresh)), f"thresh trunc {threshold_op}", debug)
     else:
         raise ValueError("threshold_op must be str or int")
 
@@ -486,12 +554,15 @@ def label(
             cv_plot(
                 np.hstack((thresh, thresh_new)),
                 f"post_thresh_morphology: {morph_func.__name__}",
+                debug,
             )
             thresh = thresh_new
         elif morph_func in [cv.MORPH_OPEN, cv.MORPH_CLOSE]:
             thresh_new = cv.morphologyEx(thresh, morph_func, kernel, **kwargs)
             cv_plot(
-                np.hstack((thresh, thresh_new)), f"pre_thresh_morphology: {morph_func}"
+                np.hstack((thresh, thresh_new)),
+                f"post_thresh_morphology: {morph_func}",
+                debug,
             )
             thresh = thresh_new
         else:
@@ -511,12 +582,12 @@ def label(
     # convert contours to bounding rectangles
     rects = [list(cv.boundingRect(cnt)) for cnt in contours]
 
-    if custom_rect_filter:
-        rects = custom_rect_filter(rects, img.shape)
-
     # group contours across horizontal axis
     if group_horizontal:
         rects = group_horizontal_rects(rects)
+
+    if custom_rect_filter:
+        rects = custom_rect_filter(rects, img.shape)
 
     # don't include DC bias
     if dc_block:
@@ -563,50 +634,73 @@ def label(
             [yolo_label_val, x_center_yolo, y_center_yolo, w_yolo, h_yolo]
         )
 
-    cv_plot(np.hstack((original_img, img)), "final image")
+    cv_plot(np.hstack((original_img, img)), "final image", debug)
     # if debug:
     #     print(f"{yolo_boxes=}")
     if not debug:
-        label_dir = os.path.join(os.path.dirname(filename), "labels")
-        no_label_dir = os.path.join(os.path.dirname(filename), "no_labels")
-        if not os.path.exists(label_dir):
-            os.makedirs(label_dir)
-        if not os.path.exists(no_label_dir):
-            os.makedirs(no_label_dir)
+        if not label_outdir:
+            label_outdir = os.path.join(os.path.dirname(filename), "labels")
 
-        yolo_label_filename = os.path.join(
-            os.path.dirname(filename),
-            "labels",
-            os.path.splitext(os.path.basename(filename))[0] + ".txt",
+        label_outdir = Path(label_outdir)
+        label_outdir.mkdir(parents=True, exist_ok=True)
+
+        # Write yolo label txt file to labels directory
+        yolo_label_filepath = Path(
+            label_outdir, os.path.splitext(os.path.basename(filename))[0] + ".txt"
         )
-        print(f"Writing YOLOv8 labels to {yolo_label_filename}")
-        with open(yolo_label_filename, "w") as yolo_label_file:
+
+        print(f"Writing YOLOv8 labels to {yolo_label_filepath}")
+        with open(yolo_label_filepath, "w") as yolo_label_file:
             for box in yolo_boxes:
                 row = " ".join(str(b) for b in box) + "\n"
                 yolo_label_file.write(row)
 
+        # Make bbox_images and no_bbox_images directories inside image directory
+        bbox_image_dir = os.path.join(os.path.dirname(filename), "bbox_images")
+        no_bbox_image_dir = os.path.join(os.path.dirname(filename), "no_bbox_images")
+        if not os.path.exists(bbox_image_dir):
+            os.makedirs(bbox_image_dir)
+        if not os.path.exists(no_bbox_image_dir):
+            os.makedirs(no_bbox_image_dir)
+
         if yolo_boxes:
             label_img_filename = os.path.join(
-                os.path.dirname(filename),
-                "labels",
-                "label_" + os.path.basename(filename),
+                bbox_image_dir,
+                "bbox_" + os.path.basename(filename),
             )
             print(f"Writing labelled image to {label_img_filename}")
             cv.imwrite(label_img_filename, img)
         else:
             no_label_img_filename = os.path.join(
-                os.path.dirname(filename), "no_labels", os.path.basename(filename)
+                no_bbox_image_dir, os.path.basename(filename)
             )
             print(f"Writing non-labelled image to {no_label_img_filename}")
             cv.imwrite(no_label_img_filename, img)
 
+        return str(yolo_label_filepath)
 
-args_dict = {
-    "wifi": wifi_args,
-    "tbs_crossfire": tbs_crs_args,
-    "fhss_css": fhss_css_args,
-    "msk": msk_args,
-    "dji": dji_args,
+
+auto_label_configs = {
+    "wifi": {
+        "args": wifi_args,
+        "yolo_class_labels": ["wifi"],
+    },
+    "tbs_crossfire": {
+        "args": tbs_crs_args,
+        "yolo_class_labels": ["tbs_crossfire"],
+    },
+    "fhss_css": {
+        "args": fhss_css_args,
+        "yolo_class_labels": ["fhss_css"],
+    },
+    "msk": {
+        "args": msk_args,
+        "yolo_class_labels": ["msk"],
+    },
+    "dji": {
+        "args": dji_args,
+        "yolo_class_labels": ["mini2_video", "mini2_telem"],
+    },
 }
 
 
@@ -621,7 +715,7 @@ def main():
     parser.add_argument(
         "signal_type",
         type=str,
-        choices=list(args_dict.keys()),
+        choices=list(auto_label_configs.keys()),
         help="Type of signal. Will decide labelling parameters.",
     )
     parser.add_argument(
@@ -634,8 +728,7 @@ def main():
 
     filepath = args.filepath
     label_args = default_args
-    label_args.update(args_dict[args.signal_type])
-    global debug
+    label_args.update(auto_label_configs[args.signal_type]["args"])
     debug = args.debug
 
     img_extensions = (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif")
@@ -659,7 +752,7 @@ def main():
     # loop through files
     for i, img_filename in enumerate(files):
         print(f"\n[{i+1}/{len(files)}]")
-        label(img_filename, **label_args)
+        auto_label(img_filename, debug=debug, **label_args)
 
 
 if __name__ == "__main__":
