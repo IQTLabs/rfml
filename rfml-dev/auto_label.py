@@ -3,6 +3,8 @@ import argparse
 import numpy as np
 import cv2 as cv
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 from skimage.filters import threshold_multiotsu
 
@@ -23,29 +25,94 @@ def dji_yolo_labeller(rect):
     return 0
 
 
+def rect_filter_dji(rects, shape):
+    max_width_video = 905
+    max_height_video = 105
+    max_width_telem = 60
+    max_height_telem = 12
+
+    x_correction = -2
+    y_correction = -2
+    good_rects = []
+
+    # if len(rects) > 15:
+    #     rects = []
+
+    for rect in rects:
+        x, y, w, h = rect
+
+        for max_width in [max_width_video, max_width_telem]:
+            # print(f"{w=}, {max_width=}")
+            if (w < 0.5 * max_width) or (w > 3.5 * max_width):
+                continue
+
+            # if w < (0.7 * max_width) and w > (0.3 * max_width):
+            # centering
+            center = x + (0.5 * w)
+            x = int(max(center - (0.5 * max_width), 0))
+            w = int(min(center + (0.5 * max_width) - x, shape[1] - 1 - x))
+
+            # if w * h < (0.5 * max_width * max_height):
+            #     continue
+            x += x_correction
+            y += y_correction
+            good_rects.append([x, y, w, h])
+            break
+    # print(f"{good_rects=}")
+    return good_rects
+
+
 dji_args = {
     "invert": True,
-    "pre_threshold": 1,
+    "pre_threshold": -1,
     "histogram_equalization": False,
     "pre_thresh_morphology": [],
     "kernel_open": cv.getStructuringElement(
         cv.MORPH_RECT,
-        (2, 2),  # (10,10)
+        (4, 4),  # (10,10)
     ),  # np.ones((3, 3), np.uint8),
     "kernel_close": cv.getStructuringElement(
-        cv.MORPH_RECT, (24, 12)
+        cv.MORPH_RECT, (4, 1)
     ),  # np.ones((15, 15), np.uint8),
-    "threshold_op": 0,
-    "post_thresh_morphology": [],
+    "threshold_op": "otsu",
+    "post_thresh_morphology": [
+        {
+            "morph_func": cv.MORPH_CLOSE,
+            "kernel": cv.getStructuringElement(cv.MORPH_RECT, (20, 1)),
+        },
+    ],
     "bilateral_kernel_size": 8,
-    "group_horizontal": False,
+    "group_horizontal": True,
     "area_threshold": 0.7,
     "yolo_label": dji_yolo_labeller,
     "vertical": False,
     "dc_block": None,
     "horizontal_adjust": 0,
-    "custom_rect_filter": None,
+    "custom_rect_filter": rect_filter_dji,
 }
+# dji_args = {
+#     "invert": True,
+#     "pre_threshold": 1,
+#     "histogram_equalization": False,
+#     "pre_thresh_morphology": [],
+#     "kernel_open": cv.getStructuringElement(
+#         cv.MORPH_RECT,
+#         (2, 2),  # (10,10)
+#     ),  # np.ones((3, 3), np.uint8),
+#     "kernel_close": cv.getStructuringElement(
+#         cv.MORPH_RECT, (24, 12)
+#     ),  # np.ones((15, 15), np.uint8),
+#     "threshold_op": 0,
+#     "post_thresh_morphology": [],
+#     "bilateral_kernel_size": 8,
+#     "group_horizontal": False,
+#     "area_threshold": 0.7,
+#     "yolo_label": dji_yolo_labeller,
+#     "vertical": False,
+#     "dc_block": None,
+#     "horizontal_adjust": 0,
+#     "custom_rect_filter": None,
+# }
 
 
 def rect_filter_msk(rects, shape):
@@ -494,7 +561,7 @@ def auto_label(
             thresh_new = cv.morphologyEx(thresh, morph_func, kernel, **kwargs)
             cv_plot(
                 np.hstack((thresh, thresh_new)),
-                f"pre_thresh_morphology: {morph_func}",
+                f"post_thresh_morphology: {morph_func}",
                 debug,
             )
             thresh = thresh_new
@@ -515,12 +582,12 @@ def auto_label(
     # convert contours to bounding rectangles
     rects = [list(cv.boundingRect(cnt)) for cnt in contours]
 
-    if custom_rect_filter:
-        rects = custom_rect_filter(rects, img.shape)
-
     # group contours across horizontal axis
     if group_horizontal:
         rects = group_horizontal_rects(rects)
+
+    if custom_rect_filter:
+        rects = custom_rect_filter(rects, img.shape)
 
     # don't include DC bias
     if dc_block:
@@ -571,42 +638,46 @@ def auto_label(
     # if debug:
     #     print(f"{yolo_boxes=}")
     if not debug:
-        # Make labels and no_labels directories inside image directory
-        label_dir = os.path.join(os.path.dirname(filename), "labels")
-        no_label_dir = os.path.join(os.path.dirname(filename), "no_labels")
-        if not os.path.exists(label_dir):
-            os.makedirs(label_dir)
-        if not os.path.exists(no_label_dir):
-            os.makedirs(no_label_dir)
+        if not label_outdir:
+            label_outdir = os.path.join(os.path.dirname(filename), "labels")
+
+        label_outdir = Path(label_outdir)
+        label_outdir.mkdir(parents=True, exist_ok=True)
 
         # Write yolo label txt file to labels directory
-        yolo_label_filepath = os.path.join(
-            os.path.dirname(filename),
-            "labels",
-            os.path.splitext(os.path.basename(filename))[0] + ".txt",
+        yolo_label_filepath = Path(
+            label_outdir, os.path.splitext(os.path.basename(filename))[0] + ".txt"
         )
+
         print(f"Writing YOLOv8 labels to {yolo_label_filepath}")
         with open(yolo_label_filepath, "w") as yolo_label_file:
             for box in yolo_boxes:
                 row = " ".join(str(b) for b in box) + "\n"
                 yolo_label_file.write(row)
 
+        # Make bbox_images and no_bbox_images directories inside image directory
+        bbox_image_dir = os.path.join(os.path.dirname(filename), "bbox_images")
+        no_bbox_image_dir = os.path.join(os.path.dirname(filename), "no_bbox_images")
+        if not os.path.exists(bbox_image_dir):
+            os.makedirs(bbox_image_dir)
+        if not os.path.exists(no_bbox_image_dir):
+            os.makedirs(no_bbox_image_dir)
+
         if yolo_boxes:
             label_img_filename = os.path.join(
-                os.path.dirname(filename),
-                "labels",
-                "label_" + os.path.basename(filename),
+                bbox_image_dir,
+                "bbox_" + os.path.basename(filename),
             )
             print(f"Writing labelled image to {label_img_filename}")
             cv.imwrite(label_img_filename, img)
         else:
             no_label_img_filename = os.path.join(
-                os.path.dirname(filename), "no_labels", os.path.basename(filename)
+                no_bbox_image_dir, os.path.basename(filename)
             )
             print(f"Writing non-labelled image to {no_label_img_filename}")
             cv.imwrite(no_label_img_filename, img)
 
-        return yolo_label_filepath
+        return str(yolo_label_filepath)
 
 
 auto_label_configs = {
