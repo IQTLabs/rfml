@@ -1,6 +1,7 @@
 import os
 import re
 import gzip
+import cv2 as cv
 import copy
 import bz2
 import zstandard
@@ -14,6 +15,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timezone
 from pathlib import Path
 from PIL import Image
+from python_on_whales import docker
 
 
 from auto_label import auto_label, auto_label_configs
@@ -82,6 +84,11 @@ SIGMF_TO_NP = {
     "cu32_le": "<u4",
     "cf32_le": "<f4",
     "cf64_le": "<f8",
+}
+
+CV_CMAPS = {
+    "turbo": cv.COLORMAP_TURBO,
+    "viridis": cv.COLORMAP_VIRIDIS,
 }
 
 
@@ -233,6 +240,63 @@ class Data:
 
         self.write_sigmf_meta(sigmf_meta)
 
+    def generate_gamutrf_spectrograms(
+        self,
+        n_samples,
+        n_fft,
+        image_outdir=None,
+        n_overlap=0,
+        cmap_str="turbo",
+        overwrite=False,
+    ):
+        if image_outdir is None:
+            image_outdir = f"{self.data_filename}_images"
+        image_outdir = Path(image_outdir)
+        image_outdir.mkdir(parents=True, exist_ok=True)
+
+        docker.run(
+            "iqtlabs/gamutrf:latest",
+            interactive=True,
+            tty=True,
+            volumes=[
+                (
+                    f"{self.data_filename}",
+                    f"/gamutrf/data/{os.path.basename(self.data_filename)}",
+                ),
+                (f"{image_outdir}", f"/gamutrf/data/{os.path.basename(image_outdir)}"),
+            ],
+            command=[
+                "gamutrf-offline",
+                f"/gamutrf/data/{os.path.basename(self.data_filename)}",
+                f"--nfft={int(n_fft)}",
+                f"--tune-step-fft={int(n_samples/n_fft)}",
+                f"--colormap={CV_CMAPS[cmap_str]}",
+                "--fft_batch_size=1",
+                "--rotate_secs=0",
+                f"--inference_output_dir=/gamutrf/data/{os.path.basename(image_outdir)}",
+            ],
+        )
+
+        image_files = [
+            image_file
+            for image_file in os.listdir(image_outdir)
+            if image_file.endswith(".png")
+        ]
+
+        for image_filename in sorted(image_files):
+            reg = re.compile(r"^image_(\d+)_([\d.]+)_(\d+)x(\d+)_(\d+)Hz\.png$")
+
+            fft_count = int(reg.match(image_filename).group(1))
+
+            spectrogram_metadata = copy.deepcopy(SPECTROGRAM_METADATA_DEFAULT)
+            spectrogram_metadata["sample_start"] = n_fft * fft_count
+            spectrogram_metadata["sample_count"] = n_samples
+            spectrogram_metadata["nfft"] = n_fft
+
+            self.import_image(
+                str(Path(image_outdir, image_filename)), spectrogram_metadata
+            )
+
     def generate_spectrograms(
         self,
         n_samples,
@@ -256,7 +320,11 @@ class Data:
             )
             image_filepath = str(Path(image_outdir, image_filename))
 
-            if not overwrite and (image_filepath in self.metadata["spectrograms"]):
+            if (
+                not overwrite
+                and (image_filepath in self.metadata["spectrograms"])
+                and os.path.isfile(image_filepath)
+            ):
                 n_seek_samples += n_samples
                 continue
 
