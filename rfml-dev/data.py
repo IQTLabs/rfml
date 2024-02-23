@@ -357,6 +357,9 @@ class Data:
         if annotation["core:label"] not in self.metadata["annotation_labels"]:
             self.metadata["annotation_labels"].append(annotation["core:label"])
 
+        with Image.open(spectrogram_filename) as spectrogram_image:
+            img_width, img_height = spectrogram_image.size
+
         freq_dim = spectrogram["nfft"]
         time_dim = spectrogram["sample_count"] / freq_dim
         sample_rate = self.metadata["global"]["core:sample_rate"]
@@ -375,20 +378,28 @@ class Data:
         labelme_label = copy.deepcopy(LABELME_DEFAULT)
 
         labelme_label["imagePath"] = os.path.basename(spectrogram_filename)
-        labelme_label["imageHeight"] = int(time_dim)
-        labelme_label["imageWidth"] = int(freq_dim)
+        labelme_label["imageHeight"] = int(img_height)
+        labelme_label["imageWidth"] = int(img_width)
 
         labelme_shape = copy.deepcopy(LABELME_SHAPE_DEFAULT)
         labelme_label["shapes"].append(labelme_shape)
         labelme_label["shapes"][0]["label"] = annotation["core:label"]
 
-        x_min = freq_space.index(annotation["core:freq_lower_edge"])
-        x_max = freq_space.index(annotation["core:freq_upper_edge"])
+        freq_min = freq_space.index(annotation["core:freq_lower_edge"])
+        freq_max = freq_space.index(annotation["core:freq_upper_edge"])
 
-        y_max = sample_space.index(annotation["core:sample_start"]) - 1
-        y_min = sample_space.index(
+        time_min = sample_space.index(annotation["core:sample_start"]) - 1
+        time_max = sample_space.index(
             annotation["core:sample_count"] + annotation["core:sample_start"]
         )
+
+        x_rescale = img_width / freq_dim
+        y_rescale = img_height / time_dim
+
+        x_min = freq_min * x_rescale
+        x_max = freq_max * x_rescale
+        y_min = time_max * y_rescale
+        y_max = time_min * y_rescale
 
         points = [[x_min, y_min], [x_max, y_max]]
         labelme_label["shapes"][0]["points"] = points
@@ -646,24 +657,37 @@ class Data:
         max_freq = freq_center + (sample_rate / 2)
         freq_space = np.linspace(start=min_freq, stop=max_freq, num=int(freq_dim))
 
+        img_width = labelme_json["imageWidth"]
+        img_height = labelme_json["imageHeight"]
+
         new_annotations = 0
         for labelme_annotation in labelme_json["shapes"]:
+            x_min = labelme_annotation["points"][0][0]
+            y_min = labelme_annotation["points"][0][1]
+            x_max = labelme_annotation["points"][1][0]
+            y_max = labelme_annotation["points"][1][1]
+
+            x_rescale = freq_dim / img_width  # 1024 / 640
+            y_rescale = time_dim / img_height  # 512 / 640
+
+            freq_min = x_min * x_rescale
+            freq_max = x_max * x_rescale
+            time_min = y_min * y_rescale
+            time_max = y_max * y_rescale
+
             sigmf_annotation = copy.deepcopy(SIGMF_ANNOTATION_DEFAULT)
 
             sigmf_annotation["core:sample_start"] = int(
-                sample_space[
-                    min(int(labelme_annotation["points"][1][1]) + 1, int(time_dim))
-                ]
+                sample_space[min(int(time_max) + 1, int(time_dim))]
             )
             sigmf_annotation["core:sample_count"] = (
-                int(sample_space[int(labelme_annotation["points"][0][1])])
-                - sigmf_annotation["core:sample_start"]
+                int(sample_space[int(time_min)]) - sigmf_annotation["core:sample_start"]
             )
             sigmf_annotation["core:freq_lower_edge"] = freq_space[
-                int(labelme_annotation["points"][0][0])
+                int(freq_min)
             ]  # min_freq
             sigmf_annotation["core:freq_upper_edge"] = freq_space[
-                int(labelme_annotation["points"][1][0])
+                int(freq_max)
             ]  # max_freq
             sigmf_annotation["core:label"] = labelme_annotation["label"]
             # sigmf_annotation["core:comment"] = "labelme"
@@ -719,20 +743,18 @@ class Data:
             y_min = (y_center - 0.5 * h) * height
             x_max = (x_center + 0.5 * w) * width
             y_max = (y_center + 0.5 * h) * height
-            points = [[x_min, y_min], [x_max, y_max]]
 
             sigmf_annotation["core:sample_start"] = int(
-                sample_space[min(int(points[1][1]) + 1, int(time_dim))]
+                sample_space[min(int(y_max) + 1, int(time_dim))]
             )
             sigmf_annotation["core:sample_count"] = (
-                int(sample_space[int(points[0][1])])
-                - sigmf_annotation["core:sample_start"]
+                int(sample_space[int(y_min)]) - sigmf_annotation["core:sample_start"]
             )
             sigmf_annotation["core:freq_lower_edge"] = freq_space[
-                int(points[0][0])
+                int(x_min)
             ]  # min_freq
             sigmf_annotation["core:freq_upper_edge"] = freq_space[
-                min(int(points[1][0]), int(freq_dim - 1))
+                min(int(x_max), int(freq_dim - 1))
             ]  # max_freq
             sigmf_annotation["core:label"] = yolo_class_labels[class_id]
             # sigmf_annotation["core:comment"] = "yolo"
