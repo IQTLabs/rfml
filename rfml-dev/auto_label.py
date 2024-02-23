@@ -618,6 +618,9 @@ def auto_label(
     # draw rectangles
     for rect in rects:
         x, y, w, h = rect
+        x = max(x, 0)
+        y = max(y, 0)
+
         cv.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
         x_center_yolo = (x + (0.5 * w)) / img.shape[1]
