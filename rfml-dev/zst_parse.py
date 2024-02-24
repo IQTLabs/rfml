@@ -23,6 +23,15 @@ SIGMF_DTYPES = {
 
 
 def parse_zst_filename(filename):
+    """
+    Parses metadata from .zst filenames following the specification used by GamutRF.
+
+    Args:
+        filename (str): Filename to parse.
+
+    Returns:
+        dict: Contains metadata regarding the I/Q recording.
+    """
     match = SAMPLE_FILENAME_RE.match(filename)
     nfft = None
     try:
