@@ -93,8 +93,24 @@ CV_CMAPS = {
 
 
 class Data:
+    """
+    Creates an object representing an I/Q signal recording and associated metadata.
+
+    Args:
+        filename (str): The path of the I/Q recording or metadata. File can be
+            of type .sigmf-meta, .sigmf-data, or .zst (using GamutRF format).
+
+    Attributes:
+        data_filename (str): The path of the I/Q recording.
+        sigmf_meta_filename (str): The path of the .sigmf-meta file. Will be created
+            and populated if it does not exist.
+        metadata (dict): The metadata associated with the I/Q recording.
+    """
+
     def __init__(self, filename):
-        # filename is a .zst, .sigmf-meta, or .sigmf-data
+        """
+        Creates and/or loads metadata from .sigmf-meta file.
+        """
         self.filename = filename
 
         if not os.path.isfile(self.filename):
@@ -134,6 +150,15 @@ class Data:
         self.metadata = json.load(open(self.sigmf_meta_filename))
 
     def auto_label_spectrograms(self, signal_type):
+        """
+        Labels all spectrogram images (from current metadata) using the auto_label.py
+        script and updates metadata with the converted annotations.
+
+        Args:
+            signal_type (str): The signal type used by auto_label.py to choose the labelling
+                configuration. See auto_label_configs in auto_label.py for signal types.
+
+        """
         if signal_type not in auto_label_configs:
             raise ValueError(
                 f"{signal_type=} must be in {list(auto_label_configs.keys())}"
@@ -156,6 +181,13 @@ class Data:
             )
 
     def get_sample_reader(self):
+        """
+        Creates file object or reader depending on the type of data file.
+
+        Returns:
+            file or reader: The file object or reader.
+        """
+
         # nosemgrep:github.workflows.config.useless-inner-function
         def bz2_reader(x):
             return bz2.open(x, "rb")
@@ -183,6 +215,21 @@ class Data:
         return default_reader
 
     def get_samples(self, n_seek_samples=0, n_samples=None):
+        """
+        Reads bytes from binary I/Q files and formats them as complex vectors.
+
+        Args:
+            n_seek_samples (int): The index of the sample to begin reading from,
+                (i.e., the number of samples to seek through the file before
+                reading). (Default = 0)
+            n_samples (int): Number of samples to read from the I/Q file.
+                (Default = None, read all samples)
+
+        Returns:
+            np.array: Complex vector of I/Q samples.
+
+        """
+
         reader = self.get_sample_reader()
 
         np_dtype = SIGMF_TO_NP[self.metadata["global"]["core:datatype"]]
@@ -219,11 +266,21 @@ class Data:
             return x1d["i"] + np.csingle(1j) * x1d["q"]
 
     def write_sigmf_meta(self, sigmf_meta):
+        """
+        Writes metadata to .sigmf-meta file.
+
+        Args:
+            sigmf_meta (dict): Data to write.
+
+        """
         with open(self.sigmf_meta_filename, "w") as outfile:
             print(f"Saving {self.sigmf_meta_filename}\n")
             outfile.write(json.dumps(sigmf_meta, indent=4))
 
     def zst_to_sigmf_meta(self):
+        """
+        Parses metadata from .zst filename (GamutRF format) and writes .sigmf-meta file.
+        """
         file_info = parse_zst_filename(self.data_filename)
         sigmf_meta = copy.deepcopy(SIGMF_META_DEFAULT)
 
@@ -245,10 +302,21 @@ class Data:
         n_samples,
         n_fft,
         image_outdir=None,
-        n_overlap=0,
         cmap_str="turbo",
         overwrite=False,
     ):
+        """
+        Creates spectrogram images using GamutRF and saves metadata.
+
+        Args:
+            n_samples (int): Number of samples to use per spectrogram.
+            n_fft (int): Length of the FFT.
+            image_outdir (str): Directory to save spectrogram images.
+                (Default = None, will create new directory called {data_filename}_images)
+            cmap_str (str): The colormap to use for generating the spectrogram.
+                (Default = turbo)
+            overwrite (bool): Whether to overwrite metadata. (Default = False)
+        """
         if image_outdir is None:
             image_outdir = f"{self.data_filename}_images"
         image_outdir = Path(image_outdir)
@@ -294,7 +362,9 @@ class Data:
             spectrogram_metadata["nfft"] = n_fft
 
             self.import_image(
-                str(Path(image_outdir, image_filename)), spectrogram_metadata
+                str(Path(image_outdir, image_filename)),
+                spectrogram_metadata,
+                overwrite=overwrite,
             )
 
     def generate_spectrograms(
@@ -303,10 +373,23 @@ class Data:
         n_fft,
         image_outdir=None,
         n_overlap=0,
-        cmap=plt.get_cmap("turbo"),
+        cmap_str="turbo",
         overwrite=False,
     ):
-        # will update sigmf-meta with image metadata
+        """
+        Creates spectrogram images and saves metadata.
+
+        Args:
+            n_samples (int): Number of samples to use per spectrogram.
+            n_fft (int): Length of the FFT.
+            image_outdir (str): Directory to save spectrogram images.
+                (Default = None, will create new directory called {data_filename}_images)
+            n_overlap (int): Number of samples to overlap between FFTs.
+            cmap_str (str): The colormap to use for generating the spectrogram.
+                (Default = turbo)
+            overwrite (bool): Whether to overwrite metadata. (Default = False)
+        """
+        cmap = plt.get_cmap(cmap_str)
 
         if image_outdir is None:
             image_outdir = f"{self.data_filename}_images"
@@ -916,13 +999,6 @@ class Data:
             self.yolo_to_sigmf(label_metadata, image_filepath, yolo_class_labels)
 
 
-# class DtypeEncoder(json.JSONEncoder):
-#     def default(self, obj):
-#         if isinstance(obj, np.dtype):
-#             return obj.descr
-#         return json.JSONEncoder.default(self, obj)
-
-
 def labels_to_sigmf(metadata_getter, label_type, yolo_dataset_yaml=None):
     if "yolo" in label_type and yolo_dataset_yaml is None:
         raise ValueError("Must define yolo_dataset_yaml when using Yolo dataset")
@@ -949,7 +1025,8 @@ def labels_to_sigmf(metadata_getter, label_type, yolo_dataset_yaml=None):
 
 
 def images_to_sigmf(metadata_getter):
-    """Instantiates a Data object and then creates or appends to a SigMF-meta file
+    """
+    Instantiates a Data object and then creates or appends to a SigMF-meta file
         (for the original sample recording) using metadata from a spectrogram image.
 
     Args:
@@ -965,7 +1042,8 @@ def images_to_sigmf(metadata_getter):
 
 
 def yield_image_metadata_from_filename(images_directory, samples_directory):
-    """Yields filenames and metadata by parsing metadata from filenames.
+    """
+    Yields filenames and metadata by parsing metadata from filenames.
 
     Args:
         image_directory (str): A directory that contains spectrogram images.
@@ -1016,7 +1094,8 @@ def yield_image_metadata_from_filename(images_directory, samples_directory):
 def yield_image_metadata_from_json(
     image_directory, metadata_directory, samples_directory
 ):
-    """Yields filenames and metadata by parsing metadata from json files.
+    """
+    Yields filenames and metadata by parsing metadata from json files.
 
     Args:
         image_directory (str): A directory that contains spectrogram images.
@@ -1081,7 +1160,8 @@ def yield_label_metadata(
 
 
 def get_custom_metadata(filename, metadata_directory):
-    """Loads metadata from custom json files.
+    """
+    Loads metadata from custom json files.
 
     Args:
         filename (str): Path of the json, image, or label file.
