@@ -408,8 +408,9 @@ class Data:
 
             if (
                 not overwrite
-                and (image_filepath in self.metadata["spectrograms"])
-                and os.path.isfile(image_filepath)
+                and ( (not "spectrograms" in self.metadata)
+                or ( (image_filepath in self.metadata["spectrograms"])
+                and os.path.isfile(image_filepath) ))
             ):
                 n_seek_samples += n_samples
                 continue

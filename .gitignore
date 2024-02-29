@@ -1,0 +1,6 @@
+*.zst
+*.sigmf-data
+*.sigmf-meta
+*.pyc
+*-checkpoint.ipynb
+.DS_Store

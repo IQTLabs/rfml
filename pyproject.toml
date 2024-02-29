@@ -18,6 +18,10 @@ pillow = "^10.2.0"
 python-on-whales = "^0.69.0"
 
 
+[tool.poetry.group.dev.dependencies]
+jupyter = "^1.0.0"
+ipykernel = "^6.29.3"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
