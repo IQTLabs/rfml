@@ -150,6 +150,9 @@ class Data:
 
         self.metadata = json.load(open(self.sigmf_meta_filename))
 
+        if "spectrograms" not in self.metadata:
+            self.metadata["spectrograms"] = {}
+
     def auto_label_spectrograms(self, signal_type):
         """
         Label all spectrogram images (from current metadata) using the auto_label.py
@@ -404,9 +407,6 @@ class Data:
                 f"{os.path.basename(self.data_filename)}_{n_seek_samples}.png"
             )
             image_filepath = str(Path(image_outdir, image_filename))
-
-            if "spectrograms" not in self.metadata:
-                self.metadata["spectrograms"] = {}
 
             if (
                 not overwrite
