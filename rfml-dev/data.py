@@ -281,7 +281,6 @@ class Data:
         """
         Parse metadata from .zst filename (GamutRF format) and write .sigmf-meta file.
         """
-
         file_info = parse_zst_filename(self.data_filename)
         sigmf_meta = copy.deepcopy(SIGMF_META_DEFAULT)
 
@@ -406,11 +405,13 @@ class Data:
             )
             image_filepath = str(Path(image_outdir, image_filename))
 
+            if "spectrograms" not in self.metadata:
+                self.metadata["spectrograms"] = {}
+
             if (
                 not overwrite
-                and ( (not "spectrograms" in self.metadata)
-                or ( (image_filepath in self.metadata["spectrograms"])
-                and os.path.isfile(image_filepath) ))
+                and image_filepath in self.metadata["spectrograms"]
+                and os.path.isfile(image_filepath)
             ):
                 n_seek_samples += n_samples
                 continue
