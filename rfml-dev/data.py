@@ -277,6 +277,21 @@ class Data:
             print(f"Saving {self.sigmf_meta_filename}\n")
             outfile.write(json.dumps(sigmf_meta, indent=4))
 
+    def export_sigmf_data(self):
+        """
+        Export .sigmf-data file from .zst file by decompressing it.
+        """
+
+        input_file = Path(self.data_filename)
+        output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
+        if not os.path.exists(output_path):
+            with open(input_file, 'rb') as compressed:
+                decomp = zstandard.ZstdDecompressor()
+                with open(output_path, 'wb') as destination:
+                    decomp.copy_stream(compressed, destination)
+
+
+
     def zst_to_sigmf_meta(self):
         """
         Parse metadata from .zst filename (GamutRF format) and write .sigmf-meta file.
@@ -608,6 +623,20 @@ class Data:
             ):
                 matching_spectrograms.append(spectrogram_filename)
         return matching_spectrograms
+
+    def import_labelme_spectrograms(self):
+        """
+        Import LabelMe JSON files that are associated with exported spectrograms and update sigmf metadata with the converted annotations.
+        """
+
+        for spectrogram_filename, spectrogram in (
+            self.metadata["spectrograms"].copy().items()
+        ):
+            label_filepath = os.path.splitext(spectrogram_filename)[0] + ".json"
+            if os.path.isfile(label_filepath):
+                label_metadata = json.load(open(label_filepath))
+                self.labelme_to_sigmf(label_metadata, spectrogram_filename)
+
 
     def export_labelme(self, label_outdir, image_outdir=None):
         """

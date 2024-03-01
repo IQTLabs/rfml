@@ -44,8 +44,11 @@ def parse_zst_filename(filename):
         freq_center = None
         sample_rate = None
         sample_type = None
-
-    sigmf_datatype = SIGMF_DTYPES[sample_type]
+    try:
+        sigmf_datatype = SIGMF_DTYPES[sample_type]
+    except KeyError:
+        print(f"Unknown sample type in ZST file name: {sample_type}")
+    print(f"Processed ZST file: {filename} (timestamp: {timestamp}, freq_center: {freq_center}, sample_rate: {sample_rate}, sample_type: {sample_type})")
     sample_dtype, sample_type = SAMPLE_DTYPES.get(sample_type, (None, None))
     sample_bits = None
     sample_len = None

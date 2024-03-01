@@ -2,7 +2,9 @@
 *.sigmf-data
 *.sigmf-meta
 *.pyc
+*.yaml
 *.txt
+*.json
 *.png
 *-checkpoint.ipynb
 .DS_Store
