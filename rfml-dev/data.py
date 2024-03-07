@@ -796,6 +796,8 @@ class Data:
             )
             if samples is None:
                 break
+
+            # This seems like a useful ref: https://github.com/sigmf/SigMF/issues/114
             samples.astype(np.complex64).tofile(iq_filepath)
             #with open(iq_filepath, "wb") as outfile:
 
