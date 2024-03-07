@@ -766,12 +766,11 @@ class Data:
 
     def export_annotation_iq(self, iq_outdir=None):
         """
-        Create YOLO label .txt files and update metadata with YOLO label files and any new IQ datafiles.
-        Starts by converting all SigMF annotations to YOLO format if not already available.
+        Export the IQ samples for the SigMF annotations. Each annotation will have its own IQ file.
+        The IQ files will be saved in a directory named after the label of the annotation.
 
         Args:
-            label_outdir (str): Directory to save YOLO .txt files.
-            image_outdir (str): Directory to save copies of IQ datafiles. (Default = None, will only copy IQ files if not None)
+            iq_outdir (str): Directory to the IQ files of the annotations.
         """
         if iq_outdir is None:
             iq_outdir = f"{self.data_filename}_iq"
