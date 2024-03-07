@@ -764,6 +764,47 @@ class Data:
         if new_image or new_metadata:
             self.write_sigmf_meta(self.metadata)
 
+    def export_annotation_iq(self, iq_outdir=None):
+        """
+        Create YOLO label .txt files and update metadata with YOLO label files and any new IQ datafiles.
+        Starts by converting all SigMF annotations to YOLO format if not already available.
+
+        Args:
+            label_outdir (str): Directory to save YOLO .txt files.
+            image_outdir (str): Directory to save copies of IQ datafiles. (Default = None, will only copy IQ files if not None)
+        """
+        if iq_outdir is None:
+            iq_outdir = f"{self.data_filename}_iq"
+
+        #Path(iq_outdir).mkdir(parents=True, exist_ok=True)
+        for annotation in self.metadata["annotations"]:
+            sample_start = annotation["core:sample_start"]
+            sample_count = annotation["core:sample_count"]
+            freq_lower_edge = annotation["core:freq_lower_edge"]
+            freq_upper_edge = annotation["core:freq_upper_edge"]
+            label = annotation["core:label"]
+
+            label_dir = str(Path(iq_outdir, label))
+            Path(label_dir).mkdir(parents=True, exist_ok=True)
+            iq_filename = (
+                f"{os.path.basename(self.data_filename)}_{sample_start}_{sample_count}.sigmf-data"
+            )
+            iq_filepath = str(Path(label_dir, iq_filename))
+            print(f"Saving {iq_filepath}\n")
+            samples = self.get_samples(
+                n_seek_samples=sample_start, n_samples=sample_count
+            )
+            if samples is None:
+                break
+            samples.astype(np.complex64).tofile(iq_filepath)
+            #with open(iq_filepath, "wb") as outfile:
+
+
+        self.convert_all_sigmf_to_yolo()
+        if "iq_snippets" not in self.metadata:
+            self.metadata["iq_snippets"] = {}
+
+
     def convert_all_sigmf_to_yolo(self):
         """
         Convert all SigMF annotations to YOLO label format and update metadata.
