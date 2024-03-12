@@ -700,9 +700,21 @@ auto_label_configs = {
         "args": msk_args,
         "yolo_class_labels": ["msk"],
     },
-    "dji": {
+    "mini2": {
         "args": dji_args,
         "yolo_class_labels": ["mini2_video", "mini2_telem"],
+    },
+    "mavic3": {
+        "args": dji_args,
+        "yolo_class_labels": ["mavic3_video", "mavic3_telem"],
+    },
+    "skydio2": {
+        "args": dji_args,
+        "yolo_class_labels": ["skydio2_video", "skydio2_telem"],
+    },
+    "skydio3": {
+        "args": dji_args,
+        "yolo_class_labels": ["skydio3_video", "skydio3_telem"],
     },
 }
 

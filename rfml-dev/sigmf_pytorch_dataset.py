@@ -77,7 +77,8 @@ class SigMFDataset(SignalDataset):
         """
         # go through directories and find files
         non_empty_dirs = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
-        non_empty_dirs.append(root)
+        non_empty_dirs.append(".")
+        print(non_empty_dirs)
         #non_empty_dirs = [d for d in non_empty_dirs if os.listdir(os.path.join(root, d))]
         #print(non_empty_dirs)
         # Identify all files associated with each class
@@ -90,7 +91,7 @@ class SigMFDataset(SignalDataset):
                 filter(
                     lambda x: x.split(".")[-1] in {"sigmf-data"}
                     and os.path.isfile(os.path.join(class_dir, x)),
-                    os.listdir(os.path.join(root, dir_name)),
+                    os.listdir(    os.path.join(root, dir_name)),
                 )
             )
 
