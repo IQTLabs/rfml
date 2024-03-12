@@ -37,11 +37,14 @@ class SigMFDataset(SignalDataset):
         self,
         root: str,
         index_filter: Optional[Callable[[Tuple[Any, SignalCapture]], bool]] = None,
+        class_list: Optional[List[str]] = [],
         **kwargs,
     ):
         super(SigMFDataset, self).__init__(**kwargs)
         self.reader = reader.reader_from_sigmf
+        self.class_list = class_list
         self.index = self.indexer_from_sigmf_annotations(root)
+
         if index_filter:
             self.index = list(filter(index_filter, self.index))
 
@@ -95,9 +98,19 @@ class SigMFDataset(SignalDataset):
             for f in proper_sigmf_files:
                 index = index + self._parse_sigmf_annotations(os.path.join(class_dir, f))
 
+        print(f"Class List: {self.class_list}")
         return index
 
 
+
+    def _get_name_to_idx(self, name: str) -> int:
+        try:
+            idx = self.class_list.index(name)
+        except ValueError:
+            print(f"Adding {name} to class list")
+            self.class_list.append(name)
+            idx = self.class_list.index(name)        
+        return idx
 
 
     def _parse_sigmf_annotations(self, absolute_file_path: str) -> List[SignalCapture]:
@@ -122,7 +135,7 @@ class SigMFDataset(SignalDataset):
         if len(meta["captures"]) == 1:
             for annotation in meta["annotations"]:
                 sample_start = annotation["core:sample_start"]
-                sample_count = annotation["core:sample_count"]
+                sample_count = 4096 #annotation["core:sample_count"]
                 signal_description = SignalDescription(
                     sample_rate=meta["global"]["core:sample_rate"],
                 )
@@ -141,7 +154,7 @@ class SigMFDataset(SignalDataset):
                         is_complex=True if "c" in meta["global"]["core:datatype"] else False,
                         signal_description=signal_description,
                     )
-                index.append((label, signal))
+                index.append((self._get_name_to_idx(label), signal))
                 #print(f"Signal {label}  {signal.num_bytes} {signal.byte_offset} {signal.item_type} {signal.is_complex} ")
         else:
             print("Not Clear how we should handle the annotations when there is more than one capture")

@@ -1,4 +1,7 @@
 *.zst
+*.pt
+*.csv
+*.ckpt
 *.sigmf-data
 *.sigmf-meta
 *.pyc
@@ -6,5 +9,6 @@
 *.txt
 *.json
 *.png
+*.mdb
 *-checkpoint.ipynb
 .DS_Store
