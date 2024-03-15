@@ -712,9 +712,9 @@ auto_label_configs = {
         "args": dji_args,
         "yolo_class_labels": ["skydio2_video", "skydio2_telem"],
     },
-    "skydio3": {
+    "skydiox2": {
         "args": dji_args,
-        "yolo_class_labels": ["skydio3_video", "skydio3_telem"],
+        "yolo_class_labels": ["skydiox2_video", "skydiox2_telem"],
     },
 }
 
