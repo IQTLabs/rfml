@@ -133,12 +133,10 @@ class Data:
                 if len(set(iq_source_files)) > 1:
                     raise ValueError("More than 1 I/Q source file.")
 
-                self.data_filename = Path(
-                    os.path.dirname(self.sigmf_meta_filename), iq_source_files[0]
+                self.data_filename = str(
+                    Path(os.path.dirname(self.sigmf_meta_filename), iq_source_files[0])
                 )
-                self.export_sigmf_data(
-                    output_path=str(self.data_filename) + ".sigmf-data"
-                )
+                self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
             else:
                 self.data_filename = (
                     f"{os.path.splitext(self.sigmf_meta_filename)[0]}.sigmf-data"
@@ -164,6 +162,13 @@ class Data:
 
             if force_sigmf_data:
                 self.export_sigmf_data()
+        elif self.filename.lower().endswith(".raw"):
+            self.data_filename = self.filename
+            self.sigmf_meta_filename = (
+                f"{os.path.splitext(self.data_filename)[0]}.sigmf-meta"
+            )
+            if not os.path.isfile(self.sigmf_meta_filename):
+                self.zst_to_sigmf_meta()
         else:
             raise ValueError(
                 f"Extension: {os.path.splitext(self.filename)[1]} of file: {self.filename} unknown."
@@ -315,7 +320,7 @@ class Data:
             print(f"Saving {self.sigmf_meta_filename}\n")
             outfile.write(json.dumps(sigmf_meta, indent=4))
 
-    def export_sigmf_data(self, output_path=None):
+    def export_sigmf_data(self, output_path=None, overwrite=False):
         """
         Export .sigmf-data file from .zst file by decompressing it.
         """
@@ -323,15 +328,23 @@ class Data:
         input_file = Path(self.data_filename)
         if not output_path:
             output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
-        if not os.path.exists(output_path):
-            with open(input_file, "rb") as compressed:
-                decomp = zstandard.ZstdDecompressor()
-                with open(output_path, "wb") as destination:
-                    decomp.copy_stream(compressed, destination)
+        if not os.path.exists(output_path) or overwrite:
+            if self.data_filename.endswith(".zst"):
+                with open(input_file, "rb") as compressed:
+                    decomp = zstandard.ZstdDecompressor()
+                    with open(output_path, "wb") as destination:
+                        decomp.copy_stream(compressed, destination)
+            elif self.data_filename.endswith(".raw"):
+                shutil.copyfile(input_file, output_path)
+            else:
+                raise ValueError("Unknown filetype. Can not convert to .sigmf-data")
 
             print(f"Converting {input_file} to {output_path}")
 
-        if self.metadata["global"]["core:dataset"] != output_path:
+        if (
+            "core:dataset" not in self.metadata["global"]
+            or self.metadata["global"]["core:dataset"] != output_path
+        ):
             self.metadata["global"]["core:dataset"] = output_path
             self.write_sigmf_meta(self.metadata)
 
@@ -342,6 +355,11 @@ class Data:
         Parse metadata from .zst filename (GamutRF format) and write .sigmf-meta file.
         """
         file_info = parse_zst_filename(self.data_filename)
+        if file_info is None:
+            raise ValueError(
+                f"Could not parse metadata from filename {self.data_filename}"
+            )
+
         sigmf_meta = copy.deepcopy(SIGMF_META_DEFAULT)
 
         sigmf_meta["global"]["core:dataset"] = self.data_filename
