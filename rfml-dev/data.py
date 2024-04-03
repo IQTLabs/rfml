@@ -171,6 +171,9 @@ class Data:
 
         self.metadata = json.load(open(self.sigmf_meta_filename))
 
+        if "spectrograms" not in self.metadata:
+            self.metadata["spectrograms"] = {}
+
         print(
             f"\nLoaded \n Data file: {self.data_filename} \n SigMF-Meta file: {self.sigmf_meta_filename}\n"
         )
@@ -461,9 +464,6 @@ class Data:
                 f"{os.path.basename(self.data_filename)}_{n_seek_samples}.png"
             )
             image_filepath = str(Path(image_outdir, image_filename))
-
-            if "spectrograms" not in self.metadata:
-                self.metadata["spectrograms"] = {}
 
             if (
                 not overwrite
