@@ -16,6 +16,7 @@ zstandard = "^0.22.0"
 pyyaml = "^6.0.1"
 pillow = "^10.2.0"
 python-on-whales = "^0.69.0"
+sigmf = "^1.2.0"
 
 
 [tool.poetry.group.dev.dependencies]

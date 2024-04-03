@@ -8,6 +8,7 @@ import zstandard
 import json
 import numpy as np
 import shutil
+import sigmf
 import warnings
 import yaml
 import matplotlib.pyplot as plt
@@ -82,6 +83,7 @@ SIGMF_TO_NP = {
     "cu8": "<u1",
     "cu16_le": "<u2",
     "cu32_le": "<u4",
+    "cf16_le": "<f2",
     "cf32_le": "<f4",
     "cf64_le": "<f8",
 }
@@ -107,11 +109,12 @@ class Data:
         metadata (dict): The metadata associated with the I/Q recording.
     """
 
-    def __init__(self, filename):
+    def __init__(self, filename, force_sigmf_data=True):
         """
         Creates and/or loads metadata from .sigmf-meta file.
         """
 
+        self.sigmf_obj = None
         self.filename = filename
 
         if not os.path.isfile(self.filename):
@@ -119,9 +122,27 @@ class Data:
 
         if self.filename.lower().endswith(".sigmf-meta"):
             self.sigmf_meta_filename = self.filename
-            self.data_filename = (
-                f"{os.path.splitext(self.sigmf_meta_filename)[0]}.sigmf-data"
-            )
+            self.metadata = json.load(open(self.sigmf_meta_filename))
+
+            # look for capture_details:source_file
+            if "captures" in self.metadata:
+                iq_source_files = []
+                for capture in self.metadata["captures"]:
+                    if "capture_details:source_file" in capture:
+                        iq_source_files.append(capture["capture_details:source_file"])
+                if len(set(iq_source_files)) > 1:
+                    raise ValueError("More than 1 I/Q source file.")
+
+                self.data_filename = Path(
+                    os.path.dirname(self.sigmf_meta_filename), iq_source_files[0]
+                )
+                self.export_sigmf_data(
+                    output_path=str(self.data_filename) + ".sigmf-data"
+                )
+            else:
+                self.data_filename = (
+                    f"{os.path.splitext(self.sigmf_meta_filename)[0]}.sigmf-data"
+                )
             if not os.path.isfile(self.data_filename):
                 raise ValueError(f"File: {self.data_filename} is not a valid file.")
         elif self.filename.lower().endswith(".sigmf-data"):
@@ -140,15 +161,22 @@ class Data:
             )
             if not os.path.isfile(self.sigmf_meta_filename):
                 self.zst_to_sigmf_meta()
+
+            if force_sigmf_data:
+                self.export_sigmf_data()
         else:
             raise ValueError(
                 f"Extension: {os.path.splitext(self.filename)[1]} of file: {self.filename} unknown."
             )
 
-        # print(f"\nData file: {self.data_filename}")
-        # print(f"\nSigMF-meta file: {self.sigmf_meta_filename}")
-
         self.metadata = json.load(open(self.sigmf_meta_filename))
+
+        print(
+            f"\nLoaded \n Data file: {self.data_filename} \n SigMF-Meta file: {self.sigmf_meta_filename}\n"
+        )
+
+        if self.data_filename.lower().endswith(".sigmf-data"):
+            self.sigmf_obj = sigmf.sigmffile.fromfile(self.data_filename.lower())
 
     def auto_label_spectrograms(self, signal_type):
         """
@@ -230,6 +258,13 @@ class Data:
             np.array: Complex vector of I/Q samples.
         """
 
+        if self.sigmf_obj:
+            if n_samples is None:
+                n_samples = -1
+            return self.sigmf_obj.read_samples(
+                start_index=n_seek_samples, count=n_samples
+            )
+
         reader = self.get_sample_reader()
 
         np_dtype = SIGMF_TO_NP[self.metadata["global"]["core:datatype"]]
@@ -277,20 +312,27 @@ class Data:
             print(f"Saving {self.sigmf_meta_filename}\n")
             outfile.write(json.dumps(sigmf_meta, indent=4))
 
-    def export_sigmf_data(self):
+    def export_sigmf_data(self, output_path=None):
         """
         Export .sigmf-data file from .zst file by decompressing it.
         """
 
         input_file = Path(self.data_filename)
-        output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
+        if not output_path:
+            output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
         if not os.path.exists(output_path):
-            with open(input_file, 'rb') as compressed:
+            with open(input_file, "rb") as compressed:
                 decomp = zstandard.ZstdDecompressor()
-                with open(output_path, 'wb') as destination:
+                with open(output_path, "wb") as destination:
                     decomp.copy_stream(compressed, destination)
 
+            print(f"Converting {input_file} to {output_path}")
 
+        if self.metadata["global"]["core:dataset"] != output_path:
+            self.metadata["global"]["core:dataset"] = output_path
+            self.write_sigmf_meta(self.metadata)
+
+        self.data_filename = output_path
 
     def zst_to_sigmf_meta(self):
         """
@@ -637,7 +679,6 @@ class Data:
                 label_metadata = json.load(open(label_filepath))
                 self.labelme_to_sigmf(label_metadata, spectrogram_filename)
 
-
     def export_labelme(self, label_outdir, image_outdir=None):
         """
         Create LabelMe JSON files and update metadata with LabelMe JSON files and any new images.
@@ -775,7 +816,7 @@ class Data:
         if iq_outdir is None:
             iq_outdir = f"{self.data_filename}_iq"
 
-        #Path(iq_outdir).mkdir(parents=True, exist_ok=True)
+        # Path(iq_outdir).mkdir(parents=True, exist_ok=True)
         for annotation in self.metadata["annotations"]:
             sample_start = annotation["core:sample_start"]
             sample_count = annotation["core:sample_count"]
@@ -785,9 +826,7 @@ class Data:
 
             label_dir = str(Path(iq_outdir, label))
             Path(label_dir).mkdir(parents=True, exist_ok=True)
-            iq_filename = (
-                f"{os.path.basename(self.data_filename)}_{sample_start}_{sample_count}.sigmf-data"
-            )
+            iq_filename = f"{os.path.basename(self.data_filename)}_{sample_start}_{sample_count}.sigmf-data"
             iq_filepath = str(Path(label_dir, iq_filename))
             print(f"Saving {iq_filepath}\n")
             samples = self.get_samples(
@@ -798,13 +837,11 @@ class Data:
 
             # This seems like a useful ref: https://github.com/sigmf/SigMF/issues/114
             samples.astype(np.complex64).tofile(iq_filepath)
-            #with open(iq_filepath, "wb") as outfile:
-
+            # with open(iq_filepath, "wb") as outfile:
 
         self.convert_all_sigmf_to_yolo()
         if "iq_snippets" not in self.metadata:
             self.metadata["iq_snippets"] = {}
-
 
     def convert_all_sigmf_to_yolo(self):
         """

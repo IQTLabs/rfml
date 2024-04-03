@@ -1,7 +1,7 @@
 import re
 import numpy as np
 
-SAMPLE_FILENAME_RE = re.compile(r"^.+\D(\d+)_(\d+)Hz.*\D(\d+)sps\.c*([fisu]\d+|raw).*$")
+SAMPLE_FILENAME_RE = re.compile(r"^.*?(\d+)_(\d+)Hz.*\D(\d+)sps\.(c*[fisu]\d+|raw).*$")
 SAMPLE_DTYPES = {
     "s8": ("<i1", "signed-integer"),
     "s16": ("<i2", "signed-integer"),
@@ -19,6 +19,7 @@ SIGMF_DTYPES = {
     "u16": "cu16_le",
     "u32": "cu32_le",
     "raw": "cf32_le",
+    "ci16": "ci16_le",
 }
 
 
@@ -48,7 +49,9 @@ def parse_zst_filename(filename):
         sigmf_datatype = SIGMF_DTYPES[sample_type]
     except KeyError:
         print(f"Unknown sample type in ZST file name: {sample_type}")
-    print(f"Processed ZST file: {filename} (timestamp: {timestamp}, freq_center: {freq_center}, sample_rate: {sample_rate}, sample_type: {sample_type})")
+    print(
+        f"Processed ZST file: {filename} (timestamp: {timestamp}, freq_center: {freq_center}, sample_rate: {sample_rate}, sample_type: {sample_type})"
+    )
     sample_dtype, sample_type = SAMPLE_DTYPES.get(sample_type, (None, None))
     sample_bits = None
     sample_len = None
