@@ -1,7 +1,10 @@
 import re
 import numpy as np
 
-SAMPLE_FILENAME_RE = re.compile(r"^.+\D(\d+)_(\d+)Hz.*\D(\d+)sps\.c*([fisu]\d+|raw).*$")
+SAMPLE_FILENAME_RE = re.compile(r"^.*?(\d+)_(\d+)Hz.*\D(\d+)sps\.(c*[fisu]\d+|raw).*$")
+#ALT_SAMPLE_FILENAME_RE = re.compile(r"^.*?([\d.]+)e(\d)_(\d+)_.*_(\d+)\.(c*[fisu]\d+|raw).*$")
+ALT_SAMPLE_FILENAME_RE = re.compile(r"^.*?_*([\d.e]+)_(\d+)_([\d-]+)_(\d+)s_(\d+)\.(c*[fisu]\d+|raw).*$") # frequency_center, sampling_rate, gain, duration, timestamp, datatype
+
 SAMPLE_DTYPES = {
     "s8": ("<i1", "signed-integer"),
     "s16": ("<i2", "signed-integer"),
@@ -19,6 +22,7 @@ SIGMF_DTYPES = {
     "u16": "cu16_le",
     "u32": "cu32_le",
     "raw": "cf32_le",
+    "ci16": "ci16_le",
 }
 
 
@@ -32,23 +36,44 @@ def parse_zst_filename(filename):
     Returns:
         dict: Contains metadata regarding the I/Q recording.
     """
+    parsed = False
+    
     match = SAMPLE_FILENAME_RE.match(filename)
-    nfft = None
     try:
         timestamp = int(match.group(1))
         freq_center = int(match.group(2))
         sample_rate = int(match.group(3))
         sample_type = match.group(4)
+        parsed = True
     except AttributeError:
-        timestamp = None
-        freq_center = None
-        sample_rate = None
-        sample_type = None
+        pass
+
+    match = ALT_SAMPLE_FILENAME_RE.match(filename)
+    # frequency_center, sampling_rate, gain, duration, timestamp, datatype
+    try: 
+        freq_center = int(float(match.group(1)))
+        sample_rate = int(match.group(2))
+        gain = int(match.group(3))
+        duration = int(match.group(4))
+        timestamp = int(match.group(5))
+        sample_type = match.group(6)
+        parsed = True
+    except AttributeError:
+        pass
+        
+    if not parsed:
+        
+        #raise ValueError(f"Could not parse file {filename}")
+        print(f"Could not parse file {filename}")
+        return None
+        
     try:
         sigmf_datatype = SIGMF_DTYPES[sample_type]
     except KeyError:
         print(f"Unknown sample type in ZST file name: {sample_type}")
-    print(f"Processed ZST file: {filename} (timestamp: {timestamp}, freq_center: {freq_center}, sample_rate: {sample_rate}, sample_type: {sample_type})")
+        return None
+        
+    #print(f"Parsed ZST file: {filename} (timestamp: {timestamp}, freq_center: {freq_center}, sample_rate: {sample_rate}, sample_type: {sample_type})")
     sample_dtype, sample_type = SAMPLE_DTYPES.get(sample_type, (None, None))
     sample_bits = None
     sample_len = None
@@ -65,7 +90,6 @@ def parse_zst_filename(filename):
         "sample_len": sample_len,  # number of bytes
         "sample_type": sample_type,
         "sample_bits": sample_bits,
-        "nfft": nfft,
         "timestamp": timestamp,
         "sigmf_datatype": sigmf_datatype,
     }

@@ -3,6 +3,7 @@ import numpy as np
 
 import json
 import os
+import zstandard
 
 
 
@@ -15,6 +16,25 @@ from typing import Any, Callable, List, Optional, Tuple, Union, Dict
 import numpy as np
 import torch
 
+
+
+def reader_from_zst(signal_capture: SignalCapture) -> SignalData:
+    """
+    Args:
+        signal_capture:
+
+    Returns:
+        signal_data: SignalData object with meta-data parsed from sigMF file
+
+    """
+    with zstandard.ZstdDecompressor().stream_reader(open(signal_capture.absolute_path, "rb"), read_across_frames=True) as file_object:
+        file_object.seek(signal_capture.byte_offset)
+        return SignalData(
+            data=file_object.read(signal_capture.num_bytes),
+            item_type=signal_capture.item_type,
+            data_type=np.dtype(np.complex128) if signal_capture.is_complex else np.dtype(np.float64),
+            signal_description=signal_capture.signal_description,
+        )
 
 
 class SigMFDataset(SignalDataset):
@@ -37,20 +57,31 @@ class SigMFDataset(SignalDataset):
         self,
         root: str,
         index_filter: Optional[Callable[[Tuple[Any, SignalCapture]], bool]] = None,
-        class_list: Optional[List[str]] = [],
+        class_list: Optional[List[str]] = None,
+        allowed_filetypes: Optional[List[str]] = [".sigmf-data"],
         **kwargs,
     ):
         super(SigMFDataset, self).__init__(**kwargs)
-        self.reader = reader.reader_from_sigmf
-        self.class_list = class_list
+        self.class_list = class_list if class_list else []
+        self.allowed_filetypes = allowed_filetypes
         self.index = self.indexer_from_sigmf_annotations(root)
 
         if index_filter:
             self.index = list(filter(index_filter, self.index))
 
+    def get_data(self, signal_capture: SignalCapture) -> SignalData:
+
+        if signal_capture.absolute_path.endswith(".sigmf-data"):
+            return reader.reader_from_sigmf(signal_capture)
+        elif signal_capture.absolute_path.endswith(".zst"):
+            return reader_from_zst(signal_capture)
+        else:
+            raise ValueError(f"Could not read {signal_capture.absolute_path}. Check file type.")
+            
     def __getitem__(self, item: int) -> Tuple[np.ndarray, Any]:  # type: ignore
-        target = self.index[item][0]
-        signal_data = self.reader(self.index[item][1])
+
+        target, signal_capture = self.index[item]
+        signal_data = self.get_data(signal_capture)
 
         if self.transform:
             signal_data = self.transform(signal_data)
@@ -84,20 +115,20 @@ class SigMFDataset(SignalDataset):
         # Identify all files associated with each class
         index = []
         for dir_idx, dir_name in enumerate(non_empty_dirs):
-            class_dir = os.path.join(root, dir_name)
+            data_dir = os.path.join(root, dir_name)
 
-            # Find files with sigmf-data at the end and make a list
+            # Find files with allowed filetype
             proper_sigmf_files = list(
                 filter(
-                    lambda x: x.split(".")[-1] in {"sigmf-data"}
-                    and os.path.isfile(os.path.join(class_dir, x)),
-                    os.listdir(    os.path.join(root, dir_name)),
+                    lambda x: os.path.splitext(x)[1] in self.allowed_filetypes
+                    and os.path.isfile(os.path.join(data_dir, x)) and os.path.isfile(os.path.join(data_dir, f"{os.path.splitext(x)[0]}.sigmf-meta")),
+                    os.listdir(data_dir),
                 )
             )
 
             # Go through each file and create and index
             for f in proper_sigmf_files:
-                index = index + self._parse_sigmf_annotations(os.path.join(class_dir, f))
+                index = index + self._parse_sigmf_annotations(os.path.join(data_dir, f))
 
         print(f"Class List: {self.class_list}")
         return index
@@ -124,8 +155,9 @@ class SigMFDataset(SignalDataset):
             signal_files:
 
         """
-        
-        meta_file_name = "{}{}".format(absolute_file_path.split("sigmf-data")[0], "sigmf-meta")
+
+        meta_file_name = f"{os.path.splitext(absolute_file_path)[0]}.sigmf-meta"
+        #meta_file_name = "{}{}".format(absolute_file_path.split("sigmf-data")[0], "sigmf-meta")
         meta = json.load(open(meta_file_name, "r"))
         item_type = indexer.SIGMF_DTYPE_MAP[meta["global"]["core:datatype"]]
         sample_size = item_type.itemsize * (2 if "c" in meta["global"]["core:datatype"] else 1)
@@ -141,12 +173,11 @@ class SigMFDataset(SignalDataset):
                     sample_rate=meta["global"]["core:sample_rate"],
                 )
                 signal_description.upper_frequency = annotation["core:freq_upper_edge"]
-                signal_description.lower_frequency = annotation["core:freq_lower_edge"]    
+                signal_description.lower_frequency = annotation["core:freq_lower_edge"] 
+                
                 label = annotation["core:label"]
                 comment = annotation["core:comment"]
 
-
-            
                 signal =  SignalCapture(
                         absolute_path=absolute_file_path,
                         num_bytes=sample_size * sample_count,

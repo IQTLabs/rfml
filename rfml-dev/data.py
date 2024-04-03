@@ -140,6 +140,13 @@ class Data:
             )
             if not os.path.isfile(self.sigmf_meta_filename):
                 self.zst_to_sigmf_meta()
+        elif self.filename.lower().endswith(".raw"):
+            self.data_filename = self.filename
+            self.sigmf_meta_filename = (
+                f"{os.path.splitext(self.data_filename)[0]}.sigmf-meta"
+            )
+            if not os.path.isfile(self.sigmf_meta_filename):
+                self.zst_to_sigmf_meta()
         else:
             raise ValueError(
                 f"Extension: {os.path.splitext(self.filename)[1]} of file: {self.filename} unknown."
@@ -277,26 +284,53 @@ class Data:
             print(f"Saving {self.sigmf_meta_filename}\n")
             outfile.write(json.dumps(sigmf_meta, indent=4))
 
-    def export_sigmf_data(self):
-        """
-        Export .sigmf-data file from .zst file by decompressing it.
-        """
+    # def raw_to_sigmf_data(self):
+    #     """
+    #     Copy .raw file to new .sigmf-data file
+    #     """
+
+    #     input_file = Path(self.data_filename)
+    #     output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
+    #     if not os.path.exists(output_path):
+    #         shutil.copyfile(input_file, output_path)
+                    
+    # def zst_to_sigmf_data(self):
+    #     """
+    #     Export .sigmf-data file from .zst file by decompressing it.
+    #     """
+
+    #     input_file = Path(self.data_filename)
+    #     output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
+    #     if not os.path.exists(output_path):
+    #         with open(input_file, 'rb') as compressed:
+    #             decomp = zstandard.ZstdDecompressor()
+    #             with open(output_path, 'wb') as destination:
+    #                 decomp.copy_stream(compressed, destination)
+
+    def export_sigmf_data(self, overwrite=False):
 
         input_file = Path(self.data_filename)
         output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
-        if not os.path.exists(output_path):
-            with open(input_file, 'rb') as compressed:
-                decomp = zstandard.ZstdDecompressor()
-                with open(output_path, 'wb') as destination:
-                    decomp.copy_stream(compressed, destination)
-
-
+        if not os.path.exists(output_path) or overwrite:
+            if self.data_filename.endswith(".zst"):
+                with open(input_file, 'rb') as compressed:
+                    decomp = zstandard.ZstdDecompressor()
+                    with open(output_path, 'wb') as destination:
+                        decomp.copy_stream(compressed, destination)
+            elif self.data_filename.endswith(".raw"):
+                shutil.copyfile(input_file, output_path)
+            else:
+                raise ValueError("Unknown filetype. Can not convert to .sigmf-data")
+            
 
     def zst_to_sigmf_meta(self):
         """
         Parse metadata from .zst filename (GamutRF format) and write .sigmf-meta file.
         """
         file_info = parse_zst_filename(self.data_filename)
+        if file_info is None:
+            raise ValueError(f"Could not parse metadata from filename {self.data_filename}")
+        
         sigmf_meta = copy.deepcopy(SIGMF_META_DEFAULT)
 
         sigmf_meta["global"]["core:dataset"] = self.data_filename
