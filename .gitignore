@@ -1,8 +1,14 @@
 *.zst
+*.pt
+*.csv
+*.ckpt
 *.sigmf-data
 *.sigmf-meta
 *.pyc
+*.yaml
 *.txt
+*.json
 *.png
+*.mdb
 *-checkpoint.ipynb
 .DS_Store
