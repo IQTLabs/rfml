@@ -124,8 +124,18 @@ class Data:
             self.sigmf_meta_filename = self.filename
             self.metadata = json.load(open(self.sigmf_meta_filename))
 
+            self.data_filename = None 
+            sigmf_data_filename = (
+                f"{os.path.splitext(self.sigmf_meta_filename)[0]}.sigmf-data"
+            )
+            if os.path.isfile(sigmf_data_filename):
+                self.data_filename = sigmf_data_filename
+            elif os.path.isfile(self.metadata["global"].get("core:dataset", "")):
+                self.data_filename = self.metadata["global"]["core:dataset"]
+                if force_sigmf_data:
+                    self.export_sigmf_data()
             # look for capture_details:source_file
-            if "captures" in self.metadata:
+            elif "captures" in self.metadata:
                 iq_source_files = []
                 for capture in self.metadata["captures"]:
                     if "capture_details:source_file" in capture:
@@ -133,15 +143,12 @@ class Data:
                 if len(set(iq_source_files)) > 1:
                     raise ValueError("More than 1 I/Q source file.")
 
-                self.data_filename = str(
-                    Path(os.path.dirname(self.sigmf_meta_filename), iq_source_files[0])
-                )
-                self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
-            else:
-                self.data_filename = (
-                    f"{os.path.splitext(self.sigmf_meta_filename)[0]}.sigmf-data"
-                )
-            if not os.path.isfile(self.data_filename):
+                if iq_source_files:
+                    self.data_filename = str(
+                        Path(os.path.dirname(self.sigmf_meta_filename), iq_source_files[0])
+                    )
+                    self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
+            if not self.data_filename or not os.path.isfile(self.data_filename):
                 raise ValueError(f"File: {self.data_filename} is not a valid file.")
         elif self.filename.lower().endswith(".sigmf-data"):
             self.data_filename = self.filename
@@ -184,7 +191,7 @@ class Data:
         )
 
         if self.data_filename.lower().endswith(".sigmf-data"):
-            self.sigmf_obj = sigmf.sigmffile.fromfile(self.data_filename.lower())
+            self.sigmf_obj = sigmf.sigmffile.fromfile(self.data_filename)
 
     def auto_label_spectrograms(self, signal_type):
         """
