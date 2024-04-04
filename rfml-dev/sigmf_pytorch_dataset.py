@@ -32,9 +32,11 @@ def reader_from_zst(signal_capture: SignalCapture) -> SignalData:
         return SignalData(
             data=file_object.read(signal_capture.num_bytes),
             item_type=signal_capture.item_type,
-            data_type=np.dtype(np.complex128)
-            if signal_capture.is_complex
-            else np.dtype(np.float64),
+            data_type=(
+                np.dtype(np.complex128)
+                if signal_capture.is_complex
+                else np.dtype(np.float64)
+            ),
             signal_description=signal_capture.signal_description,
         )
 
@@ -46,10 +48,14 @@ class SigMFDataset(SignalDataset):
     Args:
         root:
             Root file path to search recursively for files
-
+        sample_count:
+            Number of I/Q samples in each example
         index_filter:
             Given an index, remove certain elements
-
+        class_list:
+            List of class names
+        allowed_filetypes:
+            Limit file extensions to the provided list
         *\\*kwargs:**
             Keyword arguments
 
@@ -58,18 +64,49 @@ class SigMFDataset(SignalDataset):
     def __init__(
         self,
         root: str,
+        sample_count: int = 2048,  # 4096
         index_filter: Optional[Callable[[Tuple[Any, SignalCapture]], bool]] = None,
         class_list: Optional[List[str]] = None,
         allowed_filetypes: Optional[List[str]] = [".sigmf-data"],
         **kwargs,
     ):
         super(SigMFDataset, self).__init__(**kwargs)
+        self.sample_count = sample_count
         self.class_list = class_list if class_list else []
         self.allowed_filetypes = allowed_filetypes
         self.index = self.indexer_from_sigmf_annotations(root)
 
         if index_filter:
             self.index = list(filter(index_filter, self.index))
+
+    def get_indices(self, indices=None):
+        if not indices:
+            return self.index
+        else:
+            return map(self.index.__getitem__, indices)
+
+    def get_class_counts(self, indices=None):
+
+        class_counts = {idx: 0 for idx in range(len(self.class_list))}
+        for label_idx, _ in self.get_indices(indices):
+            class_counts[label_idx] += 1
+        # print(f"{class_counts=}")
+
+        return class_counts
+
+    def get_weighted_sampler(self, indices=None):
+
+        class_counts = self.get_class_counts(indices)
+
+        weight = 1.0 / np.array(list(class_counts.values()))
+        samples_weight = np.array([weight[t] for t, _ in self.get_indices(indices)])
+
+        samples_weight = torch.from_numpy(samples_weight)
+        sampler = torch.utils.data.WeightedRandomSampler(
+            samples_weight, len(samples_weight)
+        )
+
+        return sampler
 
     def get_data(self, signal_capture: SignalCapture) -> SignalData:
         if signal_capture.absolute_path.endswith(".sigmf-data"):
@@ -174,7 +211,7 @@ class SigMFDataset(SignalDataset):
         if len(meta["captures"]) == 1:
             for annotation in meta["annotations"]:
                 sample_start = annotation["core:sample_start"]
-                sample_count = 4096  # annotation["core:sample_count"]
+                sample_count = self.sample_count  # annotation["core:sample_count"]
                 signal_description = SignalDescription(
                     sample_rate=meta["global"]["core:sample_rate"],
                 )
@@ -182,6 +219,7 @@ class SigMFDataset(SignalDataset):
                 signal_description.lower_frequency = annotation["core:freq_lower_edge"]
 
                 label = annotation["core:label"]
+
                 comment = annotation.get("core:comment", None)
 
                 signal = SignalCapture(
@@ -189,12 +227,13 @@ class SigMFDataset(SignalDataset):
                     num_bytes=sample_size * sample_count,
                     byte_offset=sample_size * sample_start,
                     item_type=item_type,
-                    is_complex=True
-                    if "c" in meta["global"]["core:datatype"]
-                    else False,
+                    is_complex=(
+                        True if "c" in meta["global"]["core:datatype"] else False
+                    ),
                     signal_description=signal_description,
                 )
                 index.append((self._get_name_to_idx(label), signal))
+
                 # print(f"Signal {label}  {signal.num_bytes} {signal.byte_offset} {signal.item_type} {signal.is_complex} ")
         else:
             print(
