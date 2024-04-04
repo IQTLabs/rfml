@@ -182,7 +182,7 @@ class SigMFDataset(SignalDataset):
                 signal_description.lower_frequency = annotation["core:freq_lower_edge"]
 
                 label = annotation["core:label"]
-                comment = annotation["core:comment"]
+                comment = annotation.get("core:comment", None)
 
                 signal = SignalCapture(
                     absolute_path=absolute_file_path,

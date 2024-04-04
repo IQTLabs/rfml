@@ -191,7 +191,7 @@ class Data:
         )
 
         if self.data_filename.lower().endswith(".sigmf-data"):
-            self.sigmf_obj = sigmf.sigmffile.fromfile(self.data_filename.lower())
+            self.sigmf_obj = sigmf.sigmffile.fromfile(self.data_filename)
 
     def auto_label_spectrograms(self, signal_type):
         """
