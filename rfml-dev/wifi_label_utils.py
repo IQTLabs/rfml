@@ -21,7 +21,7 @@ def power_squelch(iq_samples, threshold, window):
     return idx
 
 
-def annotate_power_squelch(data_obj, threshold, avg_window_len):
+def annotate_power_squelch(data_obj, label, threshold, avg_window_len, skip_validate=False):
     iq_samples = data_obj.get_samples()
     idx = power_squelch(iq_samples, threshold=threshold, window=avg_window_len)
 
@@ -29,7 +29,7 @@ def annotate_power_squelch(data_obj, threshold, avg_window_len):
     for start, stop in idx:
         start, stop = int(start), int(stop)
         metadata = {
-            "core:label": "anom_wifi",
+            "core:label": label,
             "core:freq_lower_edge": data_obj.metadata["captures"][0]["core:frequency"]
             - data_obj.metadata["global"]["core:sample_rate"] / 2,
             "core:freq_upper_edge": data_obj.metadata["captures"][0]["core:frequency"]
@@ -37,4 +37,4 @@ def annotate_power_squelch(data_obj, threshold, avg_window_len):
         }
         data_obj.sigmf_obj.add_annotation(start, length=stop - start, metadata=metadata)
 
-    data_obj.sigmf_obj.tofile(data_obj.sigmf_meta_filename)
+    data_obj.sigmf_obj.tofile(data_obj.sigmf_meta_filename, skip_validate=skip_validate)
