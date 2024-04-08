@@ -258,7 +258,7 @@ class Data:
 
         return default_reader
 
-    def get_samples(self, n_seek_samples=0, n_samples=None):
+    def get_samples(self, n_seek_samples=0, n_samples=-1):
         """
         Read bytes from binary I/Q files and format them as complex vectors.
 
@@ -274,8 +274,6 @@ class Data:
         """
 
         if self.sigmf_obj:
-            if n_samples is None:
-                n_samples = -1
             return self.sigmf_obj.read_samples(
                 start_index=n_seek_samples, count=n_samples
             )
@@ -289,7 +287,7 @@ class Data:
             if n_seek_samples:
                 infile.seek(int(n_seek_samples * sample_dtype.itemsize))
 
-            if n_samples:
+            if n_samples > -1:
                 sample_buffer = infile.read(int(n_samples * sample_dtype.itemsize))
             else:
                 sample_buffer = infile.read()
@@ -305,7 +303,7 @@ class Data:
                 # warnings.warn(f"{n_seek_samples} samples read. No more samples could be read from {self.data_filename}.")
                 # reached end of file
                 return None
-            if n_samples and n_buffered_samples != n_samples:
+            if n_samples > -1 and n_buffered_samples != n_samples:
                 warnings.warn(
                     f"Could only read {n_buffered_samples}/{n_samples} samples from {self.data_filename}."
                 )
