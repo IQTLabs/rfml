@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+import glob
 import json
 import os
 import zstandard
@@ -68,12 +69,14 @@ class SigMFDataset(SignalDataset):
         index_filter: Optional[Callable[[Tuple[Any, SignalCapture]], bool]] = None,
         class_list: Optional[List[str]] = None,
         allowed_filetypes: Optional[List[str]] = [".sigmf-data"],
+        only_first_samples: bool = True,
         **kwargs,
     ):
         super(SigMFDataset, self).__init__(**kwargs)
         self.sample_count = sample_count
         self.class_list = class_list if class_list else []
         self.allowed_filetypes = allowed_filetypes
+        self.only_first_samples = only_first_samples
         self.index = self.indexer_from_sigmf_annotations(root)
 
         if index_filter:
@@ -145,36 +148,46 @@ class SigMFDataset(SignalDataset):
             index: tuple of label, SignalCapture pairs
 
         """
-        # go through directories and find files
-        non_empty_dirs = [
-            d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))
-        ]
-        non_empty_dirs.append(".")
-        print(non_empty_dirs)
-        # non_empty_dirs = [d for d in non_empty_dirs if os.listdir(os.path.join(root, d))]
-        # print(non_empty_dirs)
-        # Identify all files associated with each class
         index = []
-        for dir_idx, dir_name in enumerate(non_empty_dirs):
-            data_dir = os.path.join(root, dir_name)
-
-            # Find files with allowed filetype
-            proper_sigmf_files = list(
-                filter(
-                    lambda x: os.path.splitext(x)[1] in self.allowed_filetypes
-                    and os.path.isfile(os.path.join(data_dir, x))
-                    and os.path.isfile(
-                        os.path.join(data_dir, f"{os.path.splitext(x)[0]}.sigmf-meta")
-                    ),
-                    os.listdir(data_dir),
-                )
-            )
-
-            # Go through each file and create and index
-            for f in proper_sigmf_files:
-                index = index + self._parse_sigmf_annotations(os.path.join(data_dir, f))
-
+        for file_type in [".sigmf-data"]:
+            for f in glob.glob(os.path.join(root,"**","*"+file_type), recursive=True):
+                if os.path.isfile(f"{os.path.splitext(f)[0]}.sigmf-meta"):
+                    index = index + self._parse_sigmf_annotations(f)
         print(f"Class List: {self.class_list}")
+        
+        
+        # # go through directories and find files
+        # non_empty_dirs = [
+        #     d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))
+        # ]
+        # non_empty_dirs.append(".")
+        # print(non_empty_dirs)
+        # # non_empty_dirs = [d for d in non_empty_dirs if os.listdir(os.path.join(root, d))]
+        # # print(non_empty_dirs)
+        # # Identify all files associated with each class
+        # index = []
+        # for dir_idx, dir_name in enumerate(non_empty_dirs):
+        #     data_dir = os.path.join(root, dir_name)
+
+        #     # Find files with allowed filetype
+        #     proper_sigmf_files = list(
+        #         filter(
+        #             lambda x: os.path.splitext(x)[1] in self.allowed_filetypes
+        #             and os.path.isfile(os.path.join(data_dir, x))
+        #             and os.path.isfile(
+        #                 os.path.join(data_dir, f"{os.path.splitext(x)[0]}.sigmf-meta")
+        #             ),
+        #             os.listdir(data_dir),
+        #         )
+        #     )
+
+        #     # Go through each file and create and index
+        #     for f in proper_sigmf_files:
+        #         index = index + self._parse_sigmf_annotations(os.path.join(data_dir, f))
+        
+        # print(f"Class List: {self.class_list}")
+
+
         return index
 
     def _get_name_to_idx(self, name: str) -> int:
@@ -210,7 +223,11 @@ class SigMFDataset(SignalDataset):
         index = []
         if len(meta["captures"]) == 1:
             for annotation in meta["annotations"]:
-                sample_start = annotation["core:sample_start"]
+                
+                # skip if annotation is smaller then requested sample count 
+                if annotation["core:sample_count"] < self.sample_count:
+                    continue
+
                 sample_count = self.sample_count  # annotation["core:sample_count"]
                 signal_description = SignalDescription(
                     sample_rate=meta["global"]["core:sample_rate"],
@@ -222,17 +239,24 @@ class SigMFDataset(SignalDataset):
 
                 comment = annotation.get("core:comment", None)
 
-                signal = SignalCapture(
-                    absolute_path=absolute_file_path,
-                    num_bytes=sample_size * sample_count,
-                    byte_offset=sample_size * sample_start,
-                    item_type=item_type,
-                    is_complex=(
-                        True if "c" in meta["global"]["core:datatype"] else False
-                    ),
-                    signal_description=signal_description,
-                )
-                index.append((self._get_name_to_idx(label), signal))
+                annotation_subparts = int(annotation["core:sample_count"]/self.sample_count)
+                if self.only_first_samples:
+                    annotation_subparts = 1
+
+                for i in range(annotation_subparts):
+                    sample_start = annotation["core:sample_start"] + (i*self.sample_count)
+
+                    signal = SignalCapture(
+                        absolute_path=absolute_file_path,
+                        num_bytes=sample_size * sample_count,
+                        byte_offset=sample_size * sample_start,
+                        item_type=item_type,
+                        is_complex=(
+                            True if "c" in meta["global"]["core:datatype"] else False
+                        ),
+                        signal_description=signal_description,
+                    )
+                    index.append((self._get_name_to_idx(label), signal))
 
                 # print(f"Signal {label}  {signal.num_bytes} {signal.byte_offset} {signal.item_type} {signal.is_complex} ")
         else:
