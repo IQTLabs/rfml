@@ -65,7 +65,7 @@ from torchsig.transforms import (
 
 
 dataset_path = "./dev_data/torchsig_test/"
-num_iq_samples = 2096
+num_iq_samples = 1024
 
 
 # In[35]:
@@ -162,6 +162,7 @@ transform = level2
 dataset = SigMFDataset( root=dataset_path,
                        sample_count=num_iq_samples,
                        transform=transform,
+                       only_first_samples=False,
                        # class_list=class_list,
 )
 
@@ -205,8 +206,9 @@ print(f"{len(val_data)=}, {val_class_counts=}")
 model = efficientnet_b4(
     pretrained=True,
     path="efficientnet_b4.pt",
+    num_classes=len(dataset.class_list),
 )
-model.classifier = torch.nn.Linear(in_features=1792, out_features=len(dataset.class_list), bias=True)
+#model.classifier = torch.nn.Linear(in_features=model.classifier.in_features, out_features=len(dataset.class_list), bias=True)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = model.to(device)
