@@ -6,7 +6,7 @@ from pytorch_lightning import LightningModule
 from torch import optim
 
 class CustomNetwork(LightningModule):
-    def __init__(self, model, data_loader, val_data_loader):
+    def __init__(self, model, data_loader=None, val_data_loader=None):
         super(CustomNetwork, self).__init__()
         self.mdl = model
         self.data_loader = data_loader
@@ -14,7 +14,8 @@ class CustomNetwork(LightningModule):
 
         # Hyperparameters
         self.lr = 0.001
-        self.batch_size = data_loader.batch_size
+        if data_loader:
+            self.batch_size = data_loader.batch_size
 
     def forward(self, x):
         return self.mdl(x)

@@ -157,7 +157,6 @@ level2 = Compose(
 #     ST.ComplexTo2D(),
 # ])
 transform = level2
-# class_list = ['mini2_video']
 
 dataset = SigMFDataset( root=dataset_path,
                        sample_count=num_iq_samples,
