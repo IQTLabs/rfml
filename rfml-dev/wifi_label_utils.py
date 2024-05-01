@@ -38,3 +38,4 @@ def annotate_power_squelch(data_obj, label, threshold, avg_window_len, skip_vali
         data_obj.sigmf_obj.add_annotation(start, length=stop - start, metadata=metadata)
 
     data_obj.sigmf_obj.tofile(data_obj.sigmf_meta_filename, skip_validate=skip_validate)
+    print(f"Writing {len(data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY])} annotations to {data_obj.sigmf_meta_filename}")
