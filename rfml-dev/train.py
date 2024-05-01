@@ -64,7 +64,8 @@ from torchsig.transforms import (
 # In[ ]:
 
 
-dataset_path = "./dev_data/torchsig_test/"
+# dataset_path = "./dev_data/torchsig_train/"
+dataset_path = "./data/gamutrf/gamutrf-wifi-and-anom-bladerf"
 num_iq_samples = 1024
 
 
@@ -161,8 +162,9 @@ transform = level2
 dataset = SigMFDataset( root=dataset_path,
                        sample_count=num_iq_samples,
                        transform=transform,
-                       only_first_samples=False,
+                       only_first_samples=True,
                        # class_list=class_list,
+                       class_list=['anom_wifi','wifi'],
 )
 
 
@@ -404,6 +406,7 @@ dataset.class_list
 
 
 # In[ ]:
+
 
 
 

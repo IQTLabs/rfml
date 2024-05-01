@@ -9,6 +9,7 @@ import data as data_class
 import wifi_label_utils
 
 
+
 def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False):
     
     data_obj = data_class.Data(filename)
@@ -23,8 +24,8 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False):
     avg_pwr_db = 10*np.log10(avg_pwr)
 
     
-    guess_threshold_old = (np.max(avg_pwr_db) + np.mean(avg_pwr_db))/2
-    guess_threshold_old = 1.05 * np.max(avg_pwr_db)
+    guess_threshold = (np.max(avg_pwr_db) + np.mean(avg_pwr_db))/2
+    #guess_threshold = 1.05 * np.max(avg_pwr_db)
 
     #MAD estimator
 
@@ -51,21 +52,22 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False):
         
         plt.figure()
         #plt.plot(avg_pwr_db[int(0*20480000e-2):int(avg_duration*20.48e6)])
-        # db_plot = avg_pwr_db[int(0*20.48e6):int(avg_duration*20.48e6)]
-        db_plot = avg_pwr_db[int(3.06*20.48e6):int(3.08*20.48e6)]
+        db_plot = avg_pwr_db[int(0*20.48e6):int(avg_duration*20.48e6)]
+        # db_plot = avg_pwr_db[int(0.945*20.48e6):int(0.95*20.48e6)]
         # print(f"{len(db_plot)=}")
         plt.plot(db_plot)
-        plt.axhline(y = guess_threshold_old, color = 'g', linestyle = '-') 
+        plt.axhline(y = guess_threshold, color = 'g', linestyle = '-') 
         plt.axhline(y = np.mean(avg_pwr_db), color = 'r', linestyle = '-') 
         plt.axhline(y = mad, color = 'b', linestyle = '-') 
         plt.show()
         
     wifi_label_utils.annotate_power_squelch(data_obj, label, guess_threshold, avg_window_len, skip_validate=True)
 
-for f in tqdm(glob.glob("data/gamutrf/gamutrf-wifi-and-anom-bladerf/wifi*.sigmf-meta")):
+
+
+
+for f in tqdm(glob.glob("data/gamutrf/gamutrf-sd-gr-ieee-wifi/v2_host/gain_20/wifi*.sigmf-meta")):
     annotate(f, label="wifi", avg_window_len=256, avg_duration=4, debug=False)
     
-for f in tqdm(glob.glob("data/gamutrf/gamutrf-wifi-and-anom-bladerf/anom*.sigmf-meta")):
+for f in tqdm(glob.glob("data/gamutrf/gamutrf-sd-gr-ieee-wifi/v2_host/gain_20/anom*.sigmf-meta")):
     annotate(f, label="anom_wifi", avg_window_len=256, avg_duration=4, debug=False)
-
-

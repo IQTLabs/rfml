@@ -74,6 +74,7 @@ class SigMFDataset(SignalDataset):
     ):
         super(SigMFDataset, self).__init__(**kwargs)
         self.sample_count = sample_count
+        self.allowed_classes = class_list.copy() if class_list else []
         self.class_list = class_list if class_list else []
         self.allowed_filetypes = allowed_filetypes
         self.only_first_samples = only_first_samples
@@ -152,7 +153,10 @@ class SigMFDataset(SignalDataset):
         for file_type in [".sigmf-data"]:
             for f in glob.glob(os.path.join(root,"**","*"+file_type), recursive=True):
                 if os.path.isfile(f"{os.path.splitext(f)[0]}.sigmf-meta"):
-                    index = index + self._parse_sigmf_annotations(f)
+                    signals = self._parse_sigmf_annotations(f)
+                    if signals:
+                        index = index + signals
+                    # index = index + self._parse_sigmf_annotations(f)
         print(f"Class List: {self.class_list}")
         
         
@@ -223,7 +227,12 @@ class SigMFDataset(SignalDataset):
         index = []
         if len(meta["captures"]) == 1:
             for annotation in meta["annotations"]:
-                
+
+                label = annotation["core:label"] if "core:label" in annotation else None
+
+                if self.allowed_classes and (label not in self.allowed_classes):
+                    continue
+                    
                 # skip if annotation is smaller then requested sample count 
                 if annotation["core:sample_count"] < self.sample_count:
                     continue
@@ -235,7 +244,7 @@ class SigMFDataset(SignalDataset):
                 signal_description.upper_frequency = annotation["core:freq_upper_edge"]
                 signal_description.lower_frequency = annotation["core:freq_lower_edge"]
 
-                label = annotation["core:label"]
+                
 
                 comment = annotation.get("core:comment", None)
 
