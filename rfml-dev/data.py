@@ -329,7 +329,7 @@ class Data:
         """
         Export .sigmf-data file from .zst file by decompressing it.
         """
-
+        self.metadata = json.load(open(self.sigmf_meta_filename))
         input_file = Path(self.data_filename)
         if not output_path:
             output_path = os.path.splitext(input_file)[0] + ".sigmf-data"

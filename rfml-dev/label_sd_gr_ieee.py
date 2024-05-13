@@ -66,8 +66,8 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False):
 
 
 
-for f in tqdm(glob.glob("data/gamutrf/gamutrf-sd-gr-ieee-wifi/v2_host/gain_20/wifi*.sigmf-meta")):
+for f in tqdm(glob.glob("data/gamutrf/gamutrf-sd-gr-ieee-wifi/gain_40/wifi*.sigmf-meta")):
     annotate(f, label="wifi", avg_window_len=256, avg_duration=4, debug=False)
     
-for f in tqdm(glob.glob("data/gamutrf/gamutrf-sd-gr-ieee-wifi/v2_host/gain_20/anom*.sigmf-meta")):
+for f in tqdm(glob.glob("data/gamutrf/gamutrf-sd-gr-ieee-wifi/gain_40/anom*.sigmf-meta")):
     annotate(f, label="anom_wifi", avg_window_len=256, avg_duration=4, debug=False)
