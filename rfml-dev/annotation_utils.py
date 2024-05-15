@@ -106,68 +106,22 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
         plt.show()
 
     annotate_power_squelch(data_obj, guess_threshold, avg_window_len, label=label, skip_validate=True, estimate_frequency=True, dry_run=dry_run)
+    
 def get_occupied_bandwidth(samples, sample_rate, center_frequency):
 
-    # spectrogram_data, spectrogram_raw = spectrogram(
-    #     samples,
-    #     sample_rate,
-    #     256,
-    #     0,
-    # )
-    # spectrogram_color = spectrogram_cmap(spectrogram_data, plt.get_cmap("viridis"))
-
-    # plt.figure()
-    # plt.imshow(spectrogram_color)
-    # plt.show()
-
-    # print(f"{samples.shape=}")
-    # print(f"{samples=}")
-    
     f, t, Sxx = cupyx_spectrogram(samples, fs=sample_rate, return_onesided=False, scaling="spectrum")
 
-    freq_power = cupy.asnumpy(cupy.fft.fftshift(Sxx, axes=0))
-    # print(f"{freq_power.shape=}")
-
-    # print(f"{freq_power.argmax(axis=0).shape=}")
-    # print(f"{freq_power.argmax(axis=0)=}")
+    # freq_power = cupy.asnumpy(cupy.fft.fftshift(Sxx, axes=0))
     
-    # freq_power = cupy.asnumpy(cupyx_gaussian_filter(cupy.fft.fftshift(Sxx, axes=0), sigma=1))
-    # freq_power = cupyx_gaussian_filter(cupy.fft.fftshift(Sxx, axes=0), sigma=1)
     freq_power = cupy.median(cupy.fft.fftshift(Sxx, axes=0), axis=1)
-    # plt.figure()
-    # plt.pcolormesh(cupy.asnumpy(t), cupy.asnumpy(cupy.fft.fftshift(f)), cupy.asnumpy(cupy.fft.fftshift(Sxx, axes=0)))
-    # plt.ylabel('Frequency [Hz]')
-    # plt.xlabel('Time [sec]')
-    # plt.show()
-    # plt.figure()
-    # # plt.pcolormesh(cupy.asnumpy(t), cupy.asnumpy(cupy.fft.fftshift(f)), cupy.asnumpy(freq_power))
-    # plt.imshow(np.tile(np.expand_dims(cupy.asnumpy(freq_power), axis=1), (1,Sxx.shape[1])))
-    # plt.ylabel('Frequency [Hz]')
-    # plt.xlabel('Time [sec]')
-    # plt.show()
-
-    # print(f"{freq_power.shape=}")
-
-    # print(f"{freq_power.argmax(axis=0).shape=}")
-    # print(f"{freq_power.argmax(axis=0)=}")
+    
     freq_power_normalized = freq_power / freq_power.sum(axis=0)
 
-    # print(f"{freq_power_normalized.shape=}")
-    # print(f"{freq_power_normalized.argmax(axis=0).shape=}")
-    # print(f"{freq_power_normalized.argmax(axis=0)=}")
-    # freq_power_max_idxs = freq_power_normalized.argmax(axis=0)
-    # if freq_power_max_idxs.size == 1:
-    #     freq_power_max_idxs = np.expand_dims(cupy.asnumpy(freq_power_max_idxs), axis=0)
-    # print(f"{freq_power_max_idxs=}")
-    # print(f"{freq_power_max_idxs.shape=}")
-    # for i, max_power_idx in enumerate(freq_power_max_idxs):
-
-        
-        # max_power_idx = int(cupy.asnumpy(max_power_idx))
-        # print(f"{i=}, {max_power_idx=}")
+    
     max_power_idx = int(cupy.asnumpy(freq_power_normalized.argmax(axis=0)))
     lower_idx = max_power_idx
     upper_idx = max_power_idx
+    
     while True:
 
         if upper_idx == freq_power_normalized.shape[0]-1:
@@ -179,29 +133,12 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency):
         else: 
             upper_idx += 1
         
-        # print(f"{lower_idx=}, {upper_idx=}")
-        # print(f"{freq_power_normalized[lower_idx:upper_idx, i].sum()=}")
         if freq_power_normalized[lower_idx:upper_idx].sum() >= 0.94:
             break
-                
-    bounds = np.array([lower_idx,upper_idx])
-        
-        
-    # plt.figure()
-    # plt.imshow(cupy.asnumpy(cupy.fft.fftshift(Sxx, axes=0)))
+                        
+    freq_lower_edge = center_frequency + (freq_power.shape[0]/2 - upper_idx)/freq_power.shape[0]*sample_rate
+    freq_upper_edge = center_frequency + (freq_power.shape[0]/2 - lower_idx)/freq_power.shape[0]*sample_rate
 
-    # plt.axhline(y = bounds[0], color = 'r', linestyle = '-') 
-    # plt.axhline(y = bounds[1], color = 'b', linestyle = '-') 
-    # plt.show()
-    
-                              
-    freq_lower_edge = center_frequency + (freq_power.shape[0]/2 - bounds[1])/freq_power.shape[0]*sample_rate
-    freq_upper_edge = center_frequency + (freq_power.shape[0]/2 - bounds[0])/freq_power.shape[0]*sample_rate
-
-    # print(f"{freq_lower_edge=}")
-    # print(f"{freq_upper_edge=}")
-    # print(f"estimated bandwidth = {freq_upper_edge-freq_lower_edge}")
-    # raise ValueError
     return freq_lower_edge, freq_upper_edge
     
 def get_occupied_bandwidth_backup(samples, sample_rate, center_frequency):
