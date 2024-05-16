@@ -1,3 +1,5 @@
+# I/Q model training script
+
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -65,8 +67,10 @@ from torchsig.transforms import (
 
 
 # dataset_path = "./dev_data/torchsig_train/"
-dataset_path = "./data/gamutrf/gamutrf-wifi-and-anom-bladerf"
+dataset_path = "./data/gamutrf/gamutrf-sd-gr-ieee-wifi/v2_host/gain_40/"
+print(f"{dataset_path=}")
 num_iq_samples = 1024
+only_use_start_of_burst = True
 
 
 # In[35]:
@@ -162,7 +166,7 @@ transform = level2
 dataset = SigMFDataset( root=dataset_path,
                        sample_count=num_iq_samples,
                        transform=transform,
-                       only_first_samples=True,
+                       only_first_samples=only_use_start_of_burst,
                        # class_list=class_list,
                        class_list=['anom_wifi','wifi'],
 )

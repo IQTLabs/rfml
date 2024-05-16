@@ -1,3 +1,5 @@
+# Tests and helper scripts for data.py
+
 from data import Data, labels_to_sigmf, yield_label_metadata
 
 

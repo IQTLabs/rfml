@@ -1,3 +1,5 @@
+# Helper scripts to label Wi-Fi data 
+
 import numpy as np
 
 

@@ -1,3 +1,5 @@
+# Parse zst filenames for metadata using "GamutRF" syntax
+
 import re
 import numpy as np
 
