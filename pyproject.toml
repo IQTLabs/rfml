@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Lucas Tindall <ltindall@ucsd.edu>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -17,6 +18,7 @@ pyyaml = "^6.0.1"
 pillow = "^10.2.0"
 python-on-whales = "^0.69.0"
 sigmf = "^1.2.0"
+cupy-cuda12x = "^13.1.0"
 
 
 [tool.poetry.group.dev.dependencies]
