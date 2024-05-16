@@ -1,3 +1,5 @@
+# PyTorch Lightning class used for I/Q models 
+
 import torch
 
 import torch.nn.functional as F

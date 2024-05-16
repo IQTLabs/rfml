@@ -1,3 +1,5 @@
+# Tools for annotating RF data
+
 import cupy
 from cupyx.scipy.signal import spectrogram as cupyx_spectrogram
 from cupyx.scipy.ndimage import gaussian_filter as cupyx_gaussian_filter

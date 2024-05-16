@@ -1,3 +1,5 @@
+# Computer vision based tools for automatically labelling RF signals
+
 import os
 import argparse
 import numpy as np
