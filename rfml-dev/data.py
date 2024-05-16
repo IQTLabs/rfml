@@ -1,3 +1,5 @@
+# RF data operations 
+
 import os
 import re
 import gzip
@@ -133,7 +135,7 @@ class Data:
             elif os.path.isfile(self.metadata["global"].get("core:dataset", "")):
                 self.data_filename = self.metadata["global"]["core:dataset"]
                 if force_sigmf_data:
-                    self.export_sigmf_data()
+                    self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
             # look for capture_details:source_file
             elif "captures" in self.metadata:
                 iq_source_files = []
@@ -161,14 +163,20 @@ class Data:
                 )
         elif self.filename.lower().endswith(".zst"):
             self.data_filename = self.filename
-            self.sigmf_meta_filename = (
-                f"{os.path.splitext(self.data_filename)[0]}.sigmf-meta"
-            )
+            possible_sigmf_meta_filenames = [
+                f"{os.path.splitext(self.data_filename)[0]}.sigmf-meta",
+                f"{self.data_filename}.sigmf-meta"
+            ]
+
+            for possible_sigmf in possible_sigmf_meta_filenames:
+                if os.path.isfile(possible_sigmf):
+                    self.sigmf_meta_filename = possible_sigmf
+        
             if not os.path.isfile(self.sigmf_meta_filename):
                 self.zst_to_sigmf_meta()
 
             if force_sigmf_data:
-                self.export_sigmf_data()
+                self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
         elif self.filename.lower().endswith(".raw"):
             self.data_filename = self.filename
             self.sigmf_meta_filename = (
@@ -274,9 +282,13 @@ class Data:
         """
 
         if self.sigmf_obj:
-            return self.sigmf_obj.read_samples(
-                start_index=n_seek_samples, count=n_samples
-            )
+            try:
+                return self.sigmf_obj.read_samples(
+                    start_index=n_seek_samples, count=n_samples
+                )
+            except OSError:
+                # reached end of file
+                return None
 
         reader = self.get_sample_reader()
 
@@ -331,8 +343,10 @@ class Data:
         """
         self.metadata = json.load(open(self.sigmf_meta_filename))
         input_file = Path(self.data_filename)
+
         if not output_path:
             output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
+            
         if not os.path.exists(output_path) or overwrite:
             if self.data_filename.endswith(".zst"):
                 with open(input_file, "rb") as compressed:
@@ -522,7 +536,7 @@ class Data:
 
             n_seek_samples += n_samples
 
-    def sigmf_to_yolo(self, annotation, spectrogram):
+    def sigmf_to_yolo(self, annotation, spectrogram, yolo_class_list=None):
         """
         Convert a SigMF annotation to YOLO label format. See https://github.com/sigmf/SigMF/blob/sigmf-v1.x/sigmf-spec.md#annotation-segment-objects
         for SigMF annotation specification. See https://docs.ultralytics.com/datasets/detect/#ultralytics-yolo-format
@@ -536,11 +550,14 @@ class Data:
             string: YOLO label string.
         """
 
-        if "annotation_labels" not in self.metadata:
-            self.metadata["annotation_labels"] = []
-
-        if annotation["core:label"] not in self.metadata["annotation_labels"]:
-            self.metadata["annotation_labels"].append(annotation["core:label"])
+        if yolo_class_list:
+            self.metadata["annotation_labels"] = yolo_class_list
+        else:
+            if "annotation_labels" not in self.metadata:
+                self.metadata["annotation_labels"] = []
+    
+            if annotation["core:label"] not in self.metadata["annotation_labels"]:
+                self.metadata["annotation_labels"].append(annotation["core:label"])
 
         label_idx = self.metadata["annotation_labels"].index(annotation["core:label"])
 
@@ -562,35 +579,37 @@ class Data:
         # (freq_space[963]-freq_space[60])/(freq_space[1]-freq_space[0])/1024
         # (freq_space[963]-freq_space[60])/((max_freq-min_freq)/(1024-1))/1024
         # width = (annotation["core:freq_upper_edge"] - annotation["core:freq_lower_edge"]) / ((max_freq - min_freq)/(freq_dim-1))/freq_dim
+
+        freq_upper_edge = freq_space[np.absolute(np.array(freq_space) - annotation["core:freq_upper_edge"]).argmin()]
+        freq_lower_edge = freq_space[np.absolute(np.array(freq_space) - annotation["core:freq_lower_edge"]).argmin()]
+
+        sample_start = sample_space[np.absolute(np.array(sample_space) - annotation["core:sample_start"]).argmin()]
+        sample_end = sample_space[np.absolute(np.array(sample_space) - (annotation["core:sample_start"] + annotation["core:sample_count"])).argmin()]
+        
         width = (
-            freq_space.index(annotation["core:freq_upper_edge"])
-            - freq_space.index(annotation["core:freq_lower_edge"])
+            freq_upper_edge - freq_lower_edge
         ) / freq_dim
 
         # (((freq_space[963]+freq_space[60])/2)-min_freq) / ((max_freq-min_freq)/(1024-1))/1024
         x_center = (
             (
-                freq_space.index(annotation["core:freq_upper_edge"])
-                + freq_space.index(annotation["core:freq_lower_edge"])
+                freq_upper_edge
+                + freq_lower_edge
             )
             / 2
         ) / freq_dim
 
         # (sample_space.index(2008064)-1 - sample_space.index(2008064+23552)) / 512
         height = (
-            (sample_space.index(annotation["core:sample_start"]) - 1)
-            - sample_space.index(
-                annotation["core:sample_start"] + annotation["core:sample_count"]
-            )
+            (sample_start - 1)
+            - sample_end
         ) / time_dim
 
         # ((sample_space.index(2008064)-1 + sample_space.index(2008064+23552))/2) / 512
         y_center = (
             (
-                (sample_space.index(annotation["core:sample_start"]) - 1)
-                + sample_space.index(
-                    annotation["core:sample_start"] + annotation["core:sample_count"]
-                )
+                (sample_start - 1)
+                + sample_end
             )
             / 2
         ) / time_dim
@@ -765,7 +784,7 @@ class Data:
         if new_image or new_metadata:
             self.write_sigmf_meta(self.metadata)
 
-    def export_yolo(self, label_outdir, image_outdir=None):
+    def export_yolo(self, label_outdir, image_outdir=None, yolo_class_list=None):
         """
         Create YOLO label .txt files and update metadata with YOLO label files and any new images.
         Starts by converting all SigMF annotations to YOLO format if not already available.
@@ -775,7 +794,7 @@ class Data:
             image_outdir (str): Directory to save copies of images. (Default = None, will only copy images if not None)
         """
 
-        self.convert_all_sigmf_to_yolo()
+        self.convert_all_sigmf_to_yolo(yolo_class_list=yolo_class_list)
 
         Path(label_outdir).mkdir(parents=True, exist_ok=True)
         if image_outdir:
@@ -866,7 +885,13 @@ class Data:
         if "iq_snippets" not in self.metadata:
             self.metadata["iq_snippets"] = {}
 
-    def convert_all_sigmf_to_yolo(self):
+    def reset_yolo_labels(self,):
+        for spectrogram_file in self.metadata["spectrograms"]:
+            if "labels" in self.metadata["spectrograms"][spectrogram_file] and "yolo" in self.metadata["spectrograms"][spectrogram_file]["labels"]:
+                self.metadata["spectrograms"][spectrogram_file]["labels"]["yolo"] = []
+
+        
+    def convert_all_sigmf_to_yolo(self, yolo_class_list=None, overwrite=True):
         """
         Convert all SigMF annotations to YOLO label format and update metadata.
         """
@@ -877,8 +902,10 @@ class Data:
         if not self.metadata["annotations"]:
             raise ValueError("No annotations found.")
 
+        if overwrite:
+            self.reset_yolo_labels()
+            
         new_annotations = 0
-
         for annotation in self.metadata["annotations"]:
             sample_start = annotation["core:sample_start"]
             sample_count = annotation["core:sample_count"]
@@ -901,8 +928,8 @@ class Data:
                 if "yolo" not in spectrogram["labels"]:
                     spectrogram["labels"]["yolo"] = []
 
-                yolo_label = self.sigmf_to_yolo(annotation, spectrogram)
-
+                yolo_label = self.sigmf_to_yolo(annotation, spectrogram, yolo_class_list=yolo_class_list)
+                
                 if yolo_label not in spectrogram["labels"]["yolo"]:
                     spectrogram["labels"]["yolo"].append(yolo_label)
                     new_annotations += 1
