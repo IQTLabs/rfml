@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from PIL import Image
 from python_on_whales import docker
-
+from tqdm import tqdm
 
 from auto_label import auto_label, auto_label_configs
 from zst_parse import parse_zst_filename
@@ -802,7 +802,8 @@ class Data:
 
         new_image = 0
         new_metadata = 0
-        for spectrogram_filename, spectrogram in (
+        print("Writing YOLO txt label files")
+        for spectrogram_filename, spectrogram in tqdm(
             self.metadata["spectrograms"].copy().items()
         ):
             if "labels" not in spectrogram:
@@ -816,7 +817,7 @@ class Data:
             with open(yolo_filepath, "w") as f:
                 for annotation in spectrogram["labels"]["yolo"]:
                     f.write(f"{annotation}\n")
-                print(f"Saving {yolo_filepath}\n")
+                # print(f"Saving {yolo_filepath}\n")
                 if (
                     "yolo_file"
                     not in self.metadata["spectrograms"][spectrogram_filename]["labels"]
