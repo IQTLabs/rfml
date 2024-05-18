@@ -62,7 +62,7 @@ def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip
         print(f"Writing {len(data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY])} annotations to {data_obj.sigmf_meta_filename}")
 
 
-def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_run=False):
+def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_run=False, estimate_frequency=True):
     
     data_obj = data_class.Data(filename)
 
@@ -107,7 +107,7 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
         plt.title("Signal Power")
         plt.show()
 
-    annotate_power_squelch(data_obj, guess_threshold, avg_window_len, label=label, skip_validate=True, estimate_frequency=True, dry_run=dry_run)
+    annotate_power_squelch(data_obj, guess_threshold, avg_window_len, label=label, skip_validate=True, estimate_frequency=estimate_frequency, dry_run=dry_run)
     
 def get_occupied_bandwidth(samples, sample_rate, center_frequency):
 

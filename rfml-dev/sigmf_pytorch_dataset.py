@@ -66,7 +66,7 @@ class SigMFDataset(SignalDataset):
 
     def __init__(
         self,
-        root: str,
+        root: str | List[str],
         sample_count: int = 2048,  # 4096
         index_filter: Optional[Callable[[Tuple[Any, SignalCapture]], bool]] = None,
         class_list: Optional[List[str]] = None,
@@ -80,6 +80,8 @@ class SigMFDataset(SignalDataset):
         self.class_list = class_list if class_list else []
         self.allowed_filetypes = allowed_filetypes
         self.only_first_samples = only_first_samples
+        if isinstance(root, str): 
+            root = [root]
         self.index = self.indexer_from_sigmf_annotations(root)
 
         if index_filter:
@@ -140,7 +142,7 @@ class SigMFDataset(SignalDataset):
         return len(self.index)
 
     def indexer_from_sigmf_annotations(
-        self, root: str
+        self, root: List[str]
     ) -> List[Tuple[Any, SignalCapture]]:
         """An indexer the reads in the annotations from the sigmf-meta files in the provided directory
 
@@ -152,13 +154,14 @@ class SigMFDataset(SignalDataset):
 
         """
         index = []
-        for file_type in [".sigmf-data"]:
-            for f in glob.glob(os.path.join(root,"**","*"+file_type), recursive=True):
-                if os.path.isfile(f"{os.path.splitext(f)[0]}.sigmf-meta"):
-                    signals = self._parse_sigmf_annotations(f)
-                    if signals:
-                        index = index + signals
-                    # index = index + self._parse_sigmf_annotations(f)
+        for file_type in self.allowed_filetypes:
+            for r in root:
+                for f in glob.glob(os.path.join(r,"**","*"+file_type), recursive=True):
+                    if os.path.isfile(f"{os.path.splitext(f)[0]}.sigmf-meta"):
+                        signals = self._parse_sigmf_annotations(f)
+                        if signals:
+                            index = index + signals
+                        # index = index + self._parse_sigmf_annotations(f)
         print(f"Class List: {self.class_list}")
         
         

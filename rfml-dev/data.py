@@ -580,11 +580,11 @@ class Data:
         # (freq_space[963]-freq_space[60])/((max_freq-min_freq)/(1024-1))/1024
         # width = (annotation["core:freq_upper_edge"] - annotation["core:freq_lower_edge"]) / ((max_freq - min_freq)/(freq_dim-1))/freq_dim
 
-        freq_upper_edge = freq_space[np.absolute(np.array(freq_space) - annotation["core:freq_upper_edge"]).argmin()]
-        freq_lower_edge = freq_space[np.absolute(np.array(freq_space) - annotation["core:freq_lower_edge"]).argmin()]
+        freq_upper_edge = np.absolute(np.array(freq_space) - annotation["core:freq_upper_edge"]).argmin()
+        freq_lower_edge = np.absolute(np.array(freq_space) - annotation["core:freq_lower_edge"]).argmin()
 
-        sample_start = sample_space[np.absolute(np.array(sample_space) - annotation["core:sample_start"]).argmin()]
-        sample_end = sample_space[np.absolute(np.array(sample_space) - (annotation["core:sample_start"] + annotation["core:sample_count"])).argmin()]
+        sample_start = np.absolute(np.array(sample_space) - annotation["core:sample_start"]).argmin()
+        sample_end = np.absolute(np.array(sample_space) - (annotation["core:sample_start"] + annotation["core:sample_count"])).argmin()
         
         width = (
             freq_upper_edge - freq_lower_edge
@@ -615,7 +615,7 @@ class Data:
         ) / time_dim
 
         yolo_label = f"{label_idx} {x_center} {y_center} {width} {height}"
-
+        
         return yolo_label
 
     def sigmf_to_labelme(self, annotation, spectrogram, spectrogram_filename):
