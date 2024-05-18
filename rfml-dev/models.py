@@ -12,8 +12,8 @@ from torch import optim
 
 
 
-class CustomNetwork(LightningModule):
-    def __init__(self, model, data_loader=None, val_data_loader=None, num_classes=None, extra_metrics=True):
+class ExampleNetwork(LightningModule):
+    def __init__(self, model, data_loader=None, val_data_loader=None, num_classes=None, extra_metrics=True, logs_dir=None):
         super(ExampleNetwork, self).__init__()
         self.mdl = model
         self.data_loader = data_loader
@@ -28,6 +28,8 @@ class CustomNetwork(LightningModule):
 
         if self.num_classes is None:
             self.extra_metrics = False
+
+        self.logs_dir = logs_dir
             
         # Metrics
         if self.extra_metrics:
@@ -87,7 +89,7 @@ class CustomNetwork(LightningModule):
         if self.extra_metrics:
             self.confusion_mat.compute()
             fig, ax = self.confusion_mat.plot()
-            fig.savefig(Path(logs_dir, f"confusion_matrix_{self.current_epoch}.png"))  # save the figure to file
+            fig.savefig(Path(self.logs_dir, f"confusion_matrix_{self.current_epoch}.png"))  # save the figure to file
             plt.close(fig) 
             self.confusion_mat.reset()
             

@@ -17,9 +17,7 @@ def build_yolo_dirs(data_directories, n_samples, n_fft, class_list):
     label_dirs = []
     if not isinstance(data_directories, list):
         data_directories = [data_directories]
-    print(f"{data_directories=}")
     for data_directory in data_directories:
-        print(f"{data_directory=}")
         for f in tqdm(glob.glob(str(Path(data_directory,"*-meta")))):
             d = Data(f)
             d.generate_spectrograms(n_samples, n_fft, cmap_str="turbo", overwrite=False)
@@ -45,13 +43,15 @@ def train_spec(
     logs_dir = None, 
     output_dir = None,
 ):
+    print(f"\n\nSTARTING SPECTROGRAM TRAINING\n\n")
     if logs_dir is None:
         logs_dir = datetime.now().strftime('spec_logs/%m_%d_%Y_%H_%M_%S')
     if output_dir is None:
         output_dir = "./"
     output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = Path(logs_dir)
-    logs_dir.mkdir(parents=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     n_samples = n_fft * time_dim
     if not val_dataset_path: 
@@ -133,6 +133,8 @@ def train_spec(
     # Train the model
     results = model.train(data='data.yaml', imgsz=640, batch=batch_size, epochs=epochs, project=str(output_dir), name=str(logs_dir))
 
+    print(f"\n\nSPECTROGRAM TRAINING COMPLETE\n\n")
+    print(f"Find results in {str(Path(output_dir,logs_dir))}\n")
 
 
 def argument_parser():
