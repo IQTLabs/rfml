@@ -13,6 +13,15 @@ experiments = {
         "train_dir": ["data/gamutrf/gamutrf-nz-anon-wifi", "data/gamutrf/gamutrf-nz-nonanon-wifi"],
         "iq_epochs": 40,
         "spec_epochs": 100,
+        "notes": "Wi-Fi vs anomalous Wi-Fi, Ettus B200Mini, anarkiwi collect"
+    },
+    "experiment_2": {
+        "experiment_name": "experiment_2",
+        "class_list": ["mini2_video","mini2_telem"],
+        "train_dir": ["dev_data/torchsig_train/samples"],
+        "iq_epochs": 40,
+        "spec_epochs": 100,
+        "notes": "DJI Mini2, Ettus B200Mini, copy of gamutrf/gamutrf-arl/01_30_23/mini2, collected in office"
     }
 }
 

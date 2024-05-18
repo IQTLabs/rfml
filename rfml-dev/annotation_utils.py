@@ -31,19 +31,33 @@ def power_squelch(iq_samples, threshold, window):
 
     return idx
 
+def reset_annotations(data_obj):
+    data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY] = []
+    data_obj.sigmf_obj.tofile(data_obj.sigmf_meta_filename, skip_validate=True)
+    print(f"Resetting annotations in {data_obj.sigmf_meta_filename}")
 
-def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip_validate=False, estimate_frequency=False, dry_run=False, min_annotation_length=400):
+
+def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip_validate=False, estimate_frequency=False, dry_run=False, min_annotation_length=400, spectral_energy_threshold=None, min_bandwidth=None, max_bandwidth=None, overwrite=True):
     iq_samples = data_obj.get_samples()
     idx = power_squelch(iq_samples, threshold=threshold, window=avg_window_len)
 
-    data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY] = []
+    if overwrite:
+        data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY] = []
     for start, stop in tqdm(idx):
         start, stop = int(start), int(stop)
         if stop-start < min_annotation_length:
             continue
             
         if estimate_frequency:
-            freq_lower_edge, freq_upper_edge = get_occupied_bandwidth(iq_samples[start:stop], data_obj.metadata["global"]["core:sample_rate"], data_obj.metadata["captures"][0]["core:frequency"] )
+            freq_lower_edge, freq_upper_edge = get_occupied_bandwidth(iq_samples[start:stop], data_obj.metadata["global"]["core:sample_rate"], data_obj.metadata["captures"][0]["core:frequency"], spectral_energy_threshold=spectral_energy_threshold)
+            bandwidth = freq_upper_edge - freq_lower_edge
+            if min_bandwidth and bandwidth < min_bandwidth: 
+                # print(f"Skipping, {label}, {start=}, {stop=}, {bandwidth=}, {freq_upper_edge=}, {freq_lower_edge=}")
+                continue
+            if max_bandwidth and bandwidth > max_bandwidth: 
+                # print(f"Skipping, {label}, {start=}, {stop=}, {bandwidth=}, {freq_upper_edge=}, {freq_lower_edge=}")
+                continue
+            
         else: 
             freq_lower_edge = data_obj.metadata["captures"][0]["core:frequency"] - data_obj.metadata["global"]["core:sample_rate"] / 2
             freq_upper_edge = data_obj.metadata["captures"][0]["core:frequency"] + data_obj.metadata["global"]["core:sample_rate"] / 2
@@ -62,7 +76,7 @@ def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip
         print(f"Writing {len(data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY])} annotations to {data_obj.sigmf_meta_filename}")
 
 
-def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_run=False, estimate_frequency=True):
+def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_run=False, estimate_frequency=True, spectral_energy_threshold=None, force_threshold_db=None, overwrite=True, min_bandwidth=None, max_bandwidth=None):
     
     data_obj = data_class.Data(filename)
 
@@ -86,13 +100,17 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
         return np.median(series) + 6*mad
 
     mad = median_absolute_deviation(avg_pwr_db)
-    guess_threshold = mad
+
+    if force_threshold_db:
+        threshold_db = force_threshold_db
+    else:
+        threshold_db = mad
     
     if debug:
         print(f"{np.max(avg_pwr_db)=}")
         print(f"{np.mean(avg_pwr_db)=}")
         print(f"median absolute deviation threshold = {mad}")
-        print(f"using threshold = {guess_threshold}")
+        print(f"using threshold = {threshold_db}")
         # print(f"{len(avg_pwr_db)=}")
         
         plt.figure()
@@ -101,16 +119,21 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
         plt.axhline(y = guess_threshold_old, color = 'g', linestyle = '-', label="old threshold") 
         plt.axhline(y = np.mean(avg_pwr_db), color = 'r', linestyle = '-', label="average") 
         plt.axhline(y = mad, color = 'b', linestyle = '-', label="median absolute deviation threshold") 
+        if force_threshold_db:
+            plt.axhline(y = force_threshold_db, color = 'yellow', linestyle = '-', label="force threshold db") 
         plt.legend(loc="upper left")
         plt.ylabel("dB")
         plt.xlabel("time (seconds)")
         plt.title("Signal Power")
         plt.show()
 
-    annotate_power_squelch(data_obj, guess_threshold, avg_window_len, label=label, skip_validate=True, estimate_frequency=estimate_frequency, dry_run=dry_run)
+    annotate_power_squelch(data_obj, threshold_db, avg_window_len, label=label, skip_validate=True, estimate_frequency=estimate_frequency, spectral_energy_threshold=spectral_energy_threshold, min_bandwidth=min_bandwidth, max_bandwidth=max_bandwidth,  dry_run=dry_run, overwrite=overwrite)
     
-def get_occupied_bandwidth(samples, sample_rate, center_frequency):
+def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_energy_threshold=None):
 
+    if not spectral_energy_threshold:
+        spectral_energy_threshold = 0.94
+        
     f, t, Sxx = cupyx_spectrogram(samples, fs=sample_rate, return_onesided=False, scaling="spectrum")
 
     # freq_power = cupy.asnumpy(cupy.fft.fftshift(Sxx, axes=0))
@@ -135,11 +158,11 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency):
         else: 
             upper_idx += 1
         
-        if freq_power_normalized[lower_idx:upper_idx].sum() >= 0.94:
+        if freq_power_normalized[lower_idx:upper_idx].sum() >= spectral_energy_threshold:
             break
                         
-    freq_lower_edge = center_frequency + (freq_power.shape[0]/2 - upper_idx)/freq_power.shape[0]*sample_rate
-    freq_upper_edge = center_frequency + (freq_power.shape[0]/2 - lower_idx)/freq_power.shape[0]*sample_rate
+    freq_upper_edge = center_frequency - (freq_power.shape[0]/2 - upper_idx)/freq_power.shape[0]*sample_rate
+    freq_lower_edge = center_frequency - (freq_power.shape[0]/2 - lower_idx)/freq_power.shape[0]*sample_rate
 
     return freq_lower_edge, freq_upper_edge
     
