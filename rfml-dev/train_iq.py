@@ -16,10 +16,10 @@ from pathlib import Path
 import torchmetrics
 
 from torchsig.models.iq_models.efficientnet.efficientnet import efficientnet_b4
-from lightning.pytorch.callbacks import DeviceStatsMonitor
+# from lightning.pytorch.callbacks import DeviceStatsMonitor
 from torchsig.utils.cm_plotter import plot_confusion_matrix
-
-import lightning as L
+from pytorch_lightning.callbacks import ModelCheckpoint, DeviceStatsMonitor
+from pytorch_lightning import Trainer
 
 from sklearn.metrics import classification_report
 from torchsig.datasets.sig53 import Sig53
@@ -35,7 +35,7 @@ import torch
 import os
 from sigmf_db_dataset import SigMFDB
 from sigmf_pytorch_dataset import SigMFDataset
-from models import CustomNetwork
+from models import ExampleNetwork
 
 from torchsig.transforms import (
     Compose,
@@ -87,11 +87,10 @@ def train_iq(
         output_dir = "./"
     output_dir = Path(output_dir)
     logs_dir = Path(output_dir,logs_dir)
-    logs_dir.mkdir(parents=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     
     visualize_dataset(train_dataset_path, num_iq_samples, logs_dir, class_list=class_list)
 
-    exit()
     # # SigMF based Model Training
     
     eb_no=False
@@ -142,19 +141,19 @@ def train_iq(
     
     
     ###
-    if not val_dataset_path:
+    if val_dataset_path:
         train_dataset = SigMFDataset( 
             root=train_dataset_path,
             sample_count=num_iq_samples,
             transform=train_transform,
-            only_first_samples=only_first_samples,
+            only_first_samples=only_use_start_of_burst,
             class_list=class_list,
         )
         val_dataset = SigMFDataset( 
             root=val_dataset_path,
             sample_count=num_iq_samples,
             transform=val_transform,
-            only_first_samples=only_first_samples,
+            only_first_samples=only_use_start_of_burst,
             class_list=class_list,
         )
         sampler = train_dataset.get_weighted_sampler()
@@ -216,12 +215,12 @@ def train_iq(
     model = model.to(device)
     
     
-    example_model = ExampleNetwork(model, train_dataloader, val_dataloader, num_classes=len(class_list))
+    example_model = ExampleNetwork(model, train_dataloader, val_dataloader, num_classes=len(class_list), logs_dir=logs_dir)
     
     
     # Setup checkpoint callbacks
     checkpoint_filename = f"{str(output_dir)}/iq_checkpoints/checkpoint"
-    checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
+    checkpoint_callback = ModelCheckpoint(
         filename=checkpoint_filename,
         save_top_k=True,
         monitor="val_loss",
@@ -229,7 +228,7 @@ def train_iq(
     )
     # Create and fit trainer
     
-    trainer = L.Trainer(
+    trainer = Trainer(
         max_epochs=epochs, callbacks=[DeviceStatsMonitor(),checkpoint_callback], accelerator="gpu", devices=1, profiler="advanced"
     )
     trainer.fit(example_model)

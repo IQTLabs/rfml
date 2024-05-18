@@ -50,8 +50,9 @@ def train_spec(
     if output_dir is None:
         output_dir = "./"
     output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = Path(logs_dir)
-    logs_dir.mkdir(parents=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     n_samples = n_fft * time_dim
     if not val_dataset_path: 
