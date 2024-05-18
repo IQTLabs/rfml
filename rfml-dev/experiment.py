@@ -37,9 +37,11 @@ class Experiment():
         self.spec_batch_size = spec_batch_size
         self.notes = notes
 
-        Path(self.experiment_name).mkdir(parents=True, exist_ok=True)
-        with open(Path(self.experiment_name,f"{self.experiment_name}_info_{datetime.now().strftime('%m_%d_%Y_%H_%M_%S')}.json"), "w") as f:
+        Path("experiment_logs", self.experiment_name).mkdir(parents=True, exist_ok=True)
+        experiment_config_path = Path("experiment_logs", self.experiment_name, f"{self.experiment_name}_info_{datetime.now().strftime('%m_%d_%Y_%H_%M_%S')}.json")
+        with open(experiment_config_path, "w") as f:
             f.write(json.dumps(vars(self), indent=4))
+        print(f"\n\nFind experiment config file at {experiment_config_path}\n\n")
 
     def __repr__(self):
         return str(vars(self))

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from experiment import * 
 from train_iq import *
 from train_spec import *
@@ -9,6 +11,8 @@ experiments = {
         "experiment_name": "experiment_1",
         "class_list": ["wifi","anom_wifi"],
         "train_dir": ["data/gamutrf/gamutrf-sd-gr-ieee-wifi/test_offline"],
+        "iq_epochs": 4,
+        "spec_epochs": 4,
     }
 }
 
@@ -18,7 +22,8 @@ if __name__ == "__main__":
 
     exp = Experiment(**experiments["experiment_1"])
 
-
+    logs_timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
+    
     train_iq(
         train_dataset_path = exp.train_dir,
         val_dataset_path = exp.val_dir,
@@ -27,17 +32,19 @@ if __name__ == "__main__":
         epochs = exp.iq_epochs, 
         batch_size = exp.iq_batch_size, 
         class_list = exp.class_list, 
-        output_dir = exp.experiment_name,
+        output_dir = Path("experiment_logs",exp.experiment_name),
+        logs_dir = Path("iq_logs", logs_timestamp),
     )
 
     
-    # train_spec(
-    #     train_dataset_path = exp.train_dir,
-    #     val_dataset_path = exp.val_dir,
-    #     n_fft = exp.spec_n_fft, 
-    #     time_dim = exp.spec_time_dim,
-    #     epochs = exp.spec_epochs, 
-    #     batch_size = exp.spec_batch_size, 
-    #     class_list = exp.class_list, 
-    #     output_dir = exp.experiment_name,
-    # )
+    train_spec(
+        train_dataset_path = exp.train_dir,
+        val_dataset_path = exp.val_dir,
+        n_fft = exp.spec_n_fft, 
+        time_dim = exp.spec_time_dim,
+        epochs = exp.spec_epochs, 
+        batch_size = exp.spec_batch_size, 
+        class_list = exp.class_list, 
+        output_dir = Path("experiment_logs",exp.experiment_name),
+        logs_dir = Path("spec_logs", logs_timestamp),
+    )

@@ -80,7 +80,7 @@ def train_iq(
     logs_dir = None, 
     output_dir = None,
 ):
-    print(locals())
+    print(f"\n\nSTARTING I/Q TRAINING\n\n")
     if logs_dir is None:
         logs_dir = datetime.now().strftime('iq_logs/%m_%d_%Y_%H_%M_%S')
     if output_dir is None:
@@ -229,7 +229,7 @@ def train_iq(
     # Create and fit trainer
     
     trainer = Trainer(
-        max_epochs=epochs, callbacks=[DeviceStatsMonitor(),checkpoint_callback], accelerator="gpu", devices=1, profiler="advanced"
+        max_epochs=epochs, callbacks=[DeviceStatsMonitor(),checkpoint_callback], accelerator="gpu", devices=1, profiler="simple"
     )
     trainer.fit(example_model)
     
@@ -292,9 +292,8 @@ def train_iq(
     #plt.show()
     plt.savefig(Path(logs_dir, "confusion_matrix.png"))
     
-    
-    print(f"{len(train_dataset)=}, {train_class_counts=}")
-    print(f"{len(val_dataset)=}, {val_class_counts=}")
+    print(f"\n\nI/Q TRAINING COMPLETE\n\n")
+    print(f"Find results in {str(Path(logs_dir))}\n")
     
     
 
