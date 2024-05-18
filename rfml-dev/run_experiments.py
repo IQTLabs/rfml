@@ -10,9 +10,9 @@ experiments = {
     "experiment_1": {
         "experiment_name": "experiment_1",
         "class_list": ["wifi","anom_wifi"],
-        "train_dir": ["data/gamutrf/gamutrf-sd-gr-ieee-wifi/test_offline"],
-        "iq_epochs": 4,
-        "spec_epochs": 4,
+        "train_dir": ["data/gamutrf/gamutrf-nz-anon-wifi", "data/gamutrf/gamutrf-nz-nonanon-wifi"],
+        "iq_epochs": 40,
+        "spec_epochs": 100,
     }
 }
 
