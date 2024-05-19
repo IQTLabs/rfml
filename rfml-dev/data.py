@@ -785,7 +785,7 @@ class Data:
         if new_image or new_metadata:
             self.write_sigmf_meta(self.metadata)
 
-    def export_yolo(self, label_outdir, image_outdir=None, yolo_class_list=None):
+    def export_yolo(self, label_outdir, image_outdir=None, yolo_class_list=None, exp_yolo_height_boost=False):
         """
         Create YOLO label .txt files and update metadata with YOLO label files and any new images.
         Starts by converting all SigMF annotations to YOLO format if not already available.
@@ -817,6 +817,21 @@ class Data:
             yolo_filepath = Path(label_outdir, yolo_filename)
             with open(yolo_filepath, "w") as f:
                 for annotation in spectrogram["labels"]["yolo"]:
+                    if exp_yolo_height_boost:
+                        annotation_split = annotation.split(" ")
+                        w = float(annotation_split[-2])
+                        h = float(annotation_split[-1]) 
+                        if w and h: 
+                            if h * w < 0.1:
+                                mult_const = np.sqrt(0.1/(w*h))
+                                new_w = mult_const * w
+                                new_h = mult_const * h
+                                if new_w > 1:
+                                    new_w = 1.0
+                                    new_h = 0.1
+    
+                                annotation = f"{annotation_split[0]} {annotation_split[1]} {annotation_split[2]} {new_w} {new_h}"
+                        
                     f.write(f"{annotation}\n")
                 # print(f"Saving {yolo_filepath}\n")
                 if (
