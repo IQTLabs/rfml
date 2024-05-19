@@ -286,7 +286,8 @@ class Data:
                 return self.sigmf_obj.read_samples(
                     start_index=n_seek_samples, count=n_samples
                 )
-            except OSError:
+            except OSError as e:
+                print(f"Error: {e}")
                 # reached end of file
                 return None
 
@@ -844,6 +845,10 @@ class Data:
                     new_image += 1
                 except shutil.SameFileError:
                     pass
+                except FileNotFoundError:
+                    print(f"FileNotFoundError: {spectrogram_filename}")
+                    print(f"Removing {spectrogram_filename} from {self.sigmf_meta_filename}")
+                    self.metadata["spectrograms"].pop(spectrogram_filename)
 
         if new_image or new_metadata:
             self.write_sigmf_meta(self.metadata)
