@@ -19,6 +19,7 @@ class Experiment():
         spec_time_dim = 512,
         spec_epochs = 40,
         spec_batch_size = 32,
+        spec_yolo_augment = False,
         notes = None,
     ):
         self.experiment_name = experiment_name
@@ -35,6 +36,7 @@ class Experiment():
         self.spec_n_samples = spec_n_fft * spec_time_dim
         self.spec_epochs = spec_epochs
         self.spec_batch_size = spec_batch_size
+        self.spec_yolo_augment = spec_yolo_augment
         self.notes = notes
 
         Path("experiment_logs", self.experiment_name).mkdir(parents=True, exist_ok=True)

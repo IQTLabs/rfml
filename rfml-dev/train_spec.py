@@ -25,7 +25,7 @@ def build_yolo_dirs(data_directories, n_samples, n_fft, class_list):
             yolo_image_outdir = str(Path(data_directory,"yolo","images"))
             image_dirs.append(yolo_image_outdir)
             label_dirs.append(yolo_label_outdir)
-            d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list)
+            d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list, exp_yolo_height_boost=True)
     image_dirs = list(set(image_dirs))
     label_dirs = list(set(label_dirs))
     return image_dirs, label_dirs
@@ -40,6 +40,7 @@ def train_spec(
     epochs = 50, 
     batch_size = -1, 
     class_list = None, 
+    yolo_augment = False,
     logs_dir = None, 
     output_dir = None,
 ):
@@ -114,6 +115,9 @@ def train_spec(
         train_image_dirs, train_label_dirs = build_yolo_dirs(train_dataset_path, n_samples, n_fft, class_list)
         
         val_image_dirs, val_label_dirs = build_yolo_dirs(val_dataset_path, n_samples, n_fft, class_list)
+
+        train_image_dirs = [str(Path(Path.cwd(),t_dir)) for t_dir in train_image_dirs]
+        val_image_dirs = [str(Path(Path.cwd(), v_dir)) for v_dir in val_image_dirs]
         
     
     # Write data.yaml
@@ -122,16 +126,67 @@ def train_spec(
     yolo_yaml["val"] = val_image_dirs
     yolo_yaml["names"] = class_list
     yolo_yaml["nc"] = len(class_list)
+    # hsv_h: 0.0  
+    # hsv_s: 0.0  # saturation
+    # hsv_v: 0.0  # value
+    # degrees: 0.0  # rotation
+    # translate: 0.0  # translate
+    # scale: 0.0  # scale
+    # shear: 0.0  # shear
+    # perspective: 0.0  # perspective
+    # flipud: 0.0  # flip up-down
+    # fliplr: 0.0  # flip left-right
+    # mosaic: 0.0  # mosaic
+    # mixup: 0.0  # mixup
     with open('data.yaml', 'w') as outfile:
         yaml.dump(yolo_yaml, outfile, default_flow_style=False)
     print("Writing data.yaml")
-    
-    
+
+    yolo_augment_params = {}
+    if yolo_augment:
+        yolo_augment_params = {
+            "hsv_h": 0.0,  # hue
+            "hsv_s": 0.0,  # saturation
+            "hsv_v": 0.0,  # value
+            "degrees": 0.0,  # rotation
+            "translate": 0.0,  # translate
+            "scale": 0.0,  # scale
+            "shear": 0.0,  # shear
+            "perspective": 0.0,  # perspective
+            "flipud": 0.0,  # flip up-down
+            "fliplr": 0.0,  # flip left-right
+            "mosaic": 0.0,  # mosaic
+            "mixup": 0.0,  # mixup
+            "erasing": 0, # erasing
+            "crop_fraction": 1, # crop
+        }
     # YOLOv8
     # Load a model
     model = YOLO('yolov8n.pt')  # load a pretrained model (recommended for training)
     # Train the model
-    results = model.train(data='data.yaml', imgsz=640, batch=batch_size, epochs=epochs, project=str(output_dir), name=str(logs_dir))
+    results = model.train(
+        data='data.yaml', 
+        imgsz=640*2, 
+        batch=batch_size, 
+        epochs=epochs, 
+        project=str(output_dir), 
+        name=str(logs_dir),
+        **yolo_augment_params,
+        # hsv_h=0, # hue
+        # hsv_s=0, # saturation
+        # hsv_v=0, # value
+        # degrees=0, # rotation 
+        # translate=0, # translate
+        # scale=0, # scale
+        # shear=0, # shear 
+        # perspective=0, # perspective 
+        # flipud=0, # flip up-down
+        # fliplr=0, # flip left-right
+        # mosaic=0, # mosaic 
+        # mixup=0, # mixup 
+        # erasing=0, # erasing 
+        # crop_fraction=1, # crop
+    )
 
     print(f"\n\nSPECTROGRAM TRAINING COMPLETE\n\n")
     print(f"Find results in {str(Path(output_dir,logs_dir))}\n")
