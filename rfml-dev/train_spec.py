@@ -11,21 +11,24 @@ import shutil
 
 
 # Build image/label directories 
-def build_yolo_dirs(data_directories, n_samples, n_fft, class_list):
+def build_yolo_dirs(data_directories, n_samples, n_fft, class_list, skip_export=False):
     labels = set()
     image_dirs = []
     label_dirs = []
     if not isinstance(data_directories, list):
         data_directories = [data_directories]
     for data_directory in data_directories:
-        for f in tqdm(glob.glob(str(Path(data_directory,"*-meta")))):
-            d = Data(f)
-            d.generate_spectrograms(n_samples, n_fft, cmap_str="turbo", overwrite=False)
-            yolo_label_outdir = str(Path(data_directory,"yolo","labels"))
-            yolo_image_outdir = str(Path(data_directory,"yolo","images"))
-            image_dirs.append(yolo_image_outdir)
-            label_dirs.append(yolo_label_outdir)
-            d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list, exp_yolo_height_boost=True)
+        
+        yolo_label_outdir = str(Path(data_directory,"yolo","labels"))
+        yolo_image_outdir = str(Path(data_directory,"yolo","images"))
+        image_dirs.append(yolo_image_outdir)
+        label_dirs.append(yolo_label_outdir)
+        
+        if not skip_export:
+            for f in tqdm(glob.glob(str(Path(data_directory,"*-meta")))):
+                d = Data(f)
+                d.generate_spectrograms(n_samples, n_fft, cmap_str="turbo", overwrite=False)
+                d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list, exp_yolo_height_boost=True)
     image_dirs = list(set(image_dirs))
     label_dirs = list(set(label_dirs))
     return image_dirs, label_dirs
@@ -41,6 +44,7 @@ def train_spec(
     batch_size = -1, 
     class_list = None, 
     yolo_augment = False,
+    skip_export = False,
     logs_dir = None, 
     output_dir = None,
 ):
@@ -112,9 +116,9 @@ def train_spec(
         train_image_dirs = str(Path(Path.cwd(),random_split_train_image_dir))
         val_image_dirs = str(Path(Path.cwd(),random_split_val_image_dir))
     else: 
-        train_image_dirs, train_label_dirs = build_yolo_dirs(train_dataset_path, n_samples, n_fft, class_list)
+        train_image_dirs, train_label_dirs = build_yolo_dirs(train_dataset_path, n_samples, n_fft, class_list, skip_export=skip_export)
         
-        val_image_dirs, val_label_dirs = build_yolo_dirs(val_dataset_path, n_samples, n_fft, class_list)
+        val_image_dirs, val_label_dirs = build_yolo_dirs(val_dataset_path, n_samples, n_fft, class_list, skip_export=skip_export)
 
         train_image_dirs = [str(Path(Path.cwd(),t_dir)) for t_dir in train_image_dirs]
         val_image_dirs = [str(Path(Path.cwd(), v_dir)) for v_dir in val_image_dirs]
@@ -143,7 +147,8 @@ def train_spec(
     print("Writing data.yaml")
 
     yolo_augment_params = {}
-    if yolo_augment:
+    if not yolo_augment:
+        print(f"\n\nYOLO data augmentation disabled!\n\n")
         yolo_augment_params = {
             "hsv_h": 0.0,  # hue
             "hsv_s": 0.0,  # saturation
@@ -159,6 +164,7 @@ def train_spec(
             "mixup": 0.0,  # mixup
             "erasing": 0, # erasing
             "crop_fraction": 1, # crop
+            "auto_augment": None,
         }
     # YOLOv8
     # Load a model
@@ -166,11 +172,12 @@ def train_spec(
     # Train the model
     results = model.train(
         data='data.yaml', 
-        imgsz=640*2, 
+        imgsz=640, 
         batch=batch_size, 
         epochs=epochs, 
         project=str(output_dir), 
         name=str(logs_dir),
+        plots=True,
         **yolo_augment_params,
         # hsv_h=0, # hue
         # hsv_s=0, # saturation
@@ -190,6 +197,15 @@ def train_spec(
 
     print(f"\n\nSPECTROGRAM TRAINING COMPLETE\n\n")
     print(f"Find results in {str(Path(output_dir,logs_dir))}\n")
+
+    val_dir = Path(logs_dir, "conf_0.75")
+    val_dir.mkdir(parents=True, exist_ok=True)
+    model.val(
+        data='data.yaml',
+        conf=0.75,
+        project=str(output_dir), 
+        name=str(val_dir),
+    )
 
 
 def argument_parser():
