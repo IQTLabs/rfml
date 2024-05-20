@@ -20,6 +20,7 @@ class Experiment():
         spec_epochs = 40,
         spec_batch_size = 32,
         spec_yolo_augment = False,
+        spec_skip_export = False,
         notes = None,
     ):
         self.experiment_name = experiment_name
@@ -37,6 +38,7 @@ class Experiment():
         self.spec_epochs = spec_epochs
         self.spec_batch_size = spec_batch_size
         self.spec_yolo_augment = spec_yolo_augment
+        self.spec_skip_export = spec_skip_export
         self.notes = notes
 
         Path("experiment_logs", self.experiment_name).mkdir(parents=True, exist_ok=True)

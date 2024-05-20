@@ -39,6 +39,7 @@ experiments = {
         "val_dir": ["data/gamutrf/gamutrf-wifi-and-anom-bladerf"],
         "iq_epochs": 40,
         "spec_epochs": 50,
+        "spec_skip_export": True, # USE WITH CAUTION (but speeds up large directories significantly): skip after first run if using separate train/val directories 
         "notes": "Wi-Fi vs anomalous Wi-Fi, train on Ettus B200Mini RX/TX, validate on BladeRF TX & Ettus B200Mini RX, anarkiwi collect"
     },
     "experiment_4": {
@@ -78,7 +79,7 @@ experiments = {
         "iq_epochs": 10,
         "iq_batch_size": 16,
         "spec_batch_size": 32,
-        "spec_epochs": 80,
+        "spec_epochs": 40,
         "spec_n_fft": 16,
         "spec_time_dim": 25,
         "notes": "Ettus B200Mini RX, emair collect"
@@ -115,6 +116,7 @@ if __name__ == "__main__":
         batch_size = exp.spec_batch_size, 
         class_list = exp.class_list, 
         yolo_augment = exp.spec_yolo_augment,
+        skip_export = exp.spec_skip_export,
         output_dir = Path("experiment_logs",exp.experiment_name),
         logs_dir = Path("spec_logs", logs_timestamp),
     )
