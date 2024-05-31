@@ -37,7 +37,7 @@ def reset_annotations(data_obj):
     print(f"Resetting annotations in {data_obj.sigmf_meta_filename}")
 
 
-def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip_validate=False, estimate_frequency=False, dry_run=False, min_annotation_length=400, spectral_energy_threshold=None, min_bandwidth=None, max_bandwidth=None, overwrite=True, max_annotations=None, dc_block=False):
+def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip_validate=False, estimate_frequency=False, dry_run=False, min_annotation_length=400, spectral_energy_threshold=None, min_bandwidth=None, max_bandwidth=None, overwrite=True, max_annotations=None, dc_block=False, verbose=False):
     iq_samples = data_obj.get_samples()
     idx = power_squelch(iq_samples, threshold=threshold, window=avg_window_len)
 
@@ -49,7 +49,7 @@ def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip
             continue
             
         if estimate_frequency:
-            freq_lower_edge, freq_upper_edge = get_occupied_bandwidth(iq_samples[start:stop], data_obj.metadata["global"]["core:sample_rate"], data_obj.metadata["captures"][0]["core:frequency"], spectral_energy_threshold=spectral_energy_threshold, dc_block=dc_block)
+            freq_lower_edge, freq_upper_edge = get_occupied_bandwidth(iq_samples[start:stop], data_obj.metadata["global"]["core:sample_rate"], data_obj.metadata["captures"][0]["core:frequency"], spectral_energy_threshold=spectral_energy_threshold, dc_block=dc_block, verbose=verbose)
             bandwidth = freq_upper_edge - freq_lower_edge
             if min_bandwidth and bandwidth < min_bandwidth: 
                 # print(f"Skipping, {label}, {start=}, {stop=}, {bandwidth=}, {freq_upper_edge=}, {freq_lower_edge=}")
@@ -67,16 +67,19 @@ def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip
         }
         if label:
             metadata["core:label"] = label
+        
         data_obj.sigmf_obj.add_annotation(start, length=stop - start, metadata=metadata)
 
+        
+            
     # print(f"{data_obj.sigmf_obj=}")
-
+    
     if not dry_run: 
         data_obj.sigmf_obj.tofile(data_obj.sigmf_meta_filename, skip_validate=skip_validate)
         print(f"Writing {len(data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY])} annotations to {data_obj.sigmf_meta_filename}")
 
 
-def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_run=False, min_annotation_length=400, estimate_frequency=True, spectral_energy_threshold=None, force_threshold_db=None, overwrite=True, min_bandwidth=None, max_bandwidth=None, max_annotations=None, dc_block=None):
+def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_run=False, min_annotation_length=400, estimate_frequency=True, spectral_energy_threshold=None, force_threshold_db=None, overwrite=True, min_bandwidth=None, max_bandwidth=None, max_annotations=None, dc_block=None, verbose=False):
     
     data_obj = data_class.Data(filename)
 
@@ -129,9 +132,9 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
         plt.title("Signal Power")
         plt.show()
 
-    annotate_power_squelch(data_obj, threshold_db, avg_window_len, label=label, skip_validate=True, estimate_frequency=estimate_frequency, spectral_energy_threshold=spectral_energy_threshold, min_bandwidth=min_bandwidth, max_bandwidth=max_bandwidth,  dry_run=dry_run, min_annotation_length=min_annotation_length, overwrite=overwrite, max_annotations=max_annotations, dc_block=dc_block)
+    annotate_power_squelch(data_obj, threshold_db, avg_window_len, label=label, skip_validate=True, estimate_frequency=estimate_frequency, spectral_energy_threshold=spectral_energy_threshold, min_bandwidth=min_bandwidth, max_bandwidth=max_bandwidth,  dry_run=dry_run, min_annotation_length=min_annotation_length, overwrite=overwrite, max_annotations=max_annotations, dc_block=dc_block, verbose=verbose)
     
-def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_energy_threshold=None, dc_block=False):
+def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_energy_threshold=None, dc_block=False, verbose=False):
 
     if not spectral_energy_threshold:
         spectral_energy_threshold = 0.94
@@ -146,7 +149,7 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_ener
     if dc_block: 
         dc_start = int(len(freq_power)/2)-1
         dc_stop = int(len(freq_power)/2)+2
-        freq_power[dc_start:dc_stop] /= 4
+        freq_power[dc_start:dc_stop] /= 2
     
     freq_power_normalized = freq_power / freq_power.sum(axis=0)
 
@@ -154,14 +157,14 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_ener
     max_power_idx = int(cupy.asnumpy(freq_power_normalized.argmax(axis=0)))
     lower_idx = max_power_idx
     upper_idx = max_power_idx
-    
+    # print(f"{max_power_idx=}")
     while True:
-
+        # print(f"{lower_idx=}, {upper_idx=}, {freq_power_normalized[lower_idx]=}, {freq_power_normalized[upper_idx]=}")
         if upper_idx == freq_power_normalized.shape[0]-1:
             lower_idx -= 1
         elif lower_idx == 0: 
             upper_idx += 1
-        elif freq_power_normalized[lower_idx] > freq_power_normalized[upper_idx]: 
+        elif freq_power_normalized[lower_idx-1] > freq_power_normalized[upper_idx+1]: 
             lower_idx -= 1
         else: 
             upper_idx += 1
@@ -172,6 +175,27 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_ener
     freq_upper_edge = center_frequency - (freq_power.shape[0]/2 - upper_idx)/freq_power.shape[0]*sample_rate
     freq_lower_edge = center_frequency - (freq_power.shape[0]/2 - lower_idx)/freq_power.shape[0]*sample_rate
 
+    if verbose: 
+        # print(f"{freq_power_normalized[lower_idx]=}")
+        # print(f"{freq_power_normalized[upper_idx]=}")
+        # print(f"{freq_power_normalized=}")
+        fig, axs = plt.subplots(1, 3)
+        axs[0].imshow(cupy.asnumpy(cupy.fft.fftshift(Sxx, axes=0)))
+        axs[0].axhline(y = upper_idx, color = 'r', linestyle = '-') 
+        axs[0].axhline(y = lower_idx, color = 'g', linestyle = '-') 
+        #axs[0].pcolormesh(cupy.asnumpy(t), cupy.asnumpy(cupy.fft.fftshift(f)), cupy.asnumpy(cupy.fft.fftshift(Sxx, axes=0)))
+        # plt.ylabel('Frequency [Hz]')
+        # plt.xlabel('Time [sec]')
+        axs[1].imshow(np.tile(np.expand_dims(cupy.asnumpy(cupy.median(cupy.fft.fftshift(Sxx, axes=0), axis=1)), 1), 25))
+        # axs[1].axhline(y = upper_idx, color = 'r', linestyle = '-') 
+        # axs[1].axhline(y = lower_idx, color = 'g', linestyle = '-')
+
+        axs[2].imshow(np.tile(np.expand_dims(cupy.asnumpy(freq_power_normalized), 1), 25))
+        axs[2].axhline(y = max_power_idx, color = 'orange', linestyle = '-') 
+        axs[2].axhline(y = upper_idx, color = 'r', linestyle = '-') 
+        axs[2].axhline(y = lower_idx, color = 'g', linestyle = '-')
+        plt.show()
+    # exit()
     return freq_lower_edge, freq_upper_edge
     
 def get_occupied_bandwidth_backup(samples, sample_rate, center_frequency):

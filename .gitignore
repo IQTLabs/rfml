@@ -12,3 +12,4 @@
 *.mdb
 *-checkpoint.ipynb
 .DS_Store
+.python-version

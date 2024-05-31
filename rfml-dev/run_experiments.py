@@ -21,7 +21,7 @@ experiments = {
         "class_list": ["wifi","anom_wifi"],
         "train_dir": ["data/gamutrf/gamutrf-nz-anon-wifi", "data/gamutrf/gamutrf-nz-nonanon-wifi"],
         "iq_epochs": 40,
-        "spec_epochs": 10,
+        "spec_epochs": 40,
         "notes": "Wi-Fi vs anomalous Wi-Fi, Ettus B200Mini, anarkiwi collect"
     },
     "experiment_2": {
@@ -38,7 +38,7 @@ experiments = {
         "train_dir": ["data/gamutrf/gamutrf-nz-anon-wifi", "data/gamutrf/gamutrf-nz-nonanon-wifi"],
         "val_dir": ["data/gamutrf/gamutrf-wifi-and-anom-bladerf"],
         "iq_epochs": 40,
-        "spec_epochs": 50,
+        "spec_epochs": 70,
         "spec_skip_export": True, # USE WITH CAUTION (but speeds up large directories significantly): skip after first run if using separate train/val directories 
         "notes": "Wi-Fi vs anomalous Wi-Fi, train on Ettus B200Mini RX/TX, validate on BladeRF TX & Ettus B200Mini RX, anarkiwi collect"
     },
@@ -55,10 +55,10 @@ experiments = {
         "experiment_name": "experiment_5",
         "class_list": ["mini2_video","mini2_telem"],
         "train_dir": ["dev_data/torchsig_train/samples"],
-        "val_dir": ["data/gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/iq_recordings"],
+        "val_dir": ["data/gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/test_iq_label"],
         "iq_epochs": 40,
         "spec_epochs": 100,
-        "notes": "DJI Mini2, Ettus B200Mini RX, train on copy of lab collection gamutrf/gamutrf-arl/01_30_23/mini2, validate on field collect gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/iq_recordings"
+        "notes": "DJI Mini2, Ettus B200Mini RX, train on copy of lab collection gamutrf/gamutrf-arl/01_30_23/mini2, validate on field collect gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/test_iq_label"
     },
     "experiment_6": {
         "experiment_name": "experiment_6",
@@ -90,7 +90,7 @@ experiments = {
 if __name__ == "__main__":
 
 
-    exp = Experiment(**experiments["experiment_3"])
+    exp = Experiment(**experiments["experiment_1"])
 
     logs_timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
     
