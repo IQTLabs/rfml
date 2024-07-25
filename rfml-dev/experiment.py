@@ -21,6 +21,7 @@ class Experiment():
         spec_batch_size = 32,
         spec_yolo_augment = False,
         spec_skip_export = False,
+        spec_force_yolo_label_larger = False,
         notes = None,
     ):
         self.experiment_name = experiment_name
@@ -39,6 +40,7 @@ class Experiment():
         self.spec_batch_size = spec_batch_size
         self.spec_yolo_augment = spec_yolo_augment
         self.spec_skip_export = spec_skip_export
+        self.spec_force_yolo_label_larger = spec_force_yolo_label_larger
         self.notes = notes
 
         Path("experiment_logs", self.experiment_name).mkdir(parents=True, exist_ok=True)
