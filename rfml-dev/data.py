@@ -670,6 +670,10 @@ class Data:
         freq_min = freq_space.index(annotation["core:freq_lower_edge"])
         freq_max = freq_space.index(annotation["core:freq_upper_edge"])
 
+        # TODO: fix annotation that is only partially in spectrogram 
+        # possible fix 
+        # time_min = np.absolute(np.array(sample_space) - annotation["core:sample_start"]).argmin()
+        # time_max = np.absolute(np.array(sample_space) - (annotation["core:sample_start"] + annotation["core:sample_count"])).argmin()
         time_min = sample_space.index(annotation["core:sample_start"]) - 1
         time_max = sample_space.index(
             annotation["core:sample_count"] + annotation["core:sample_start"]
@@ -688,7 +692,7 @@ class Data:
 
         return labelme_label
 
-    def find_matching_spectrograms(self, sample_start, sample_count):
+    def find_matching_spectrograms(self, sample_start, sample_count, include_partial=True):
         """
         Find spectrograms that contain the specified samples.
 
@@ -707,6 +711,9 @@ class Data:
                 <= (spectrogram["sample_start"] + spectrogram["sample_count"])
             ):
                 matching_spectrograms.append(spectrogram_filename)
+            elif include_partial and ((sample_start <= spectrogram["sample_start"]+spectrogram["sample_count"]) and ((sample_start + sample_count) >= spectrogram["sample_start"])):
+                matching_spectrograms.append(spectrogram_filename)
+            
         return matching_spectrograms
 
     def import_labelme_spectrograms(self):
@@ -785,7 +792,7 @@ class Data:
         if new_image or new_metadata:
             self.write_sigmf_meta(self.metadata)
 
-    def export_yolo(self, label_outdir, image_outdir=None, yolo_class_list=None, exp_yolo_height_boost=False):
+    def export_yolo(self, label_outdir, image_outdir=None, yolo_class_list=None, force_yolo_label_larger=False):
         """
         Create YOLO label .txt files and update metadata with YOLO label files and any new images.
         Starts by converting all SigMF annotations to YOLO format if not already available.
@@ -817,7 +824,7 @@ class Data:
             yolo_filepath = Path(label_outdir, yolo_filename)
             with open(yolo_filepath, "w") as f:
                 for annotation in spectrogram["labels"]["yolo"]:
-                    if exp_yolo_height_boost:
+                    if force_yolo_label_larger:
                         annotation_split = annotation.split(" ")
                         w = float(annotation_split[-2])
                         h = float(annotation_split[-1]) 

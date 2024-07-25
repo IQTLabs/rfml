@@ -11,7 +11,7 @@ import shutil
 
 
 # Build image/label directories 
-def build_yolo_dirs(data_directories, n_samples, n_fft, class_list, skip_export=False):
+def build_yolo_dirs(data_directories, n_samples, n_fft, class_list, skip_export=False, force_yolo_label_larger=False):
     labels = set()
     image_dirs = []
     label_dirs = []
@@ -28,7 +28,7 @@ def build_yolo_dirs(data_directories, n_samples, n_fft, class_list, skip_export=
             for f in tqdm(glob.glob(str(Path(data_directory,"*-meta")))):
                 d = Data(f)
                 d.generate_spectrograms(n_samples, n_fft, cmap_str="turbo", overwrite=False)
-                d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list, exp_yolo_height_boost=True)
+                d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list, force_yolo_label_larger=True)
     image_dirs = list(set(image_dirs))
     label_dirs = list(set(label_dirs))
     return image_dirs, label_dirs
@@ -45,6 +45,7 @@ def train_spec(
     class_list = None, 
     yolo_augment = False,
     skip_export = False,
+    force_yolo_label_larger = False,
     logs_dir = None, 
     output_dir = None,
 ):
@@ -116,9 +117,9 @@ def train_spec(
         train_image_dirs = str(Path(Path.cwd(),random_split_train_image_dir))
         val_image_dirs = str(Path(Path.cwd(),random_split_val_image_dir))
     else: 
-        train_image_dirs, train_label_dirs = build_yolo_dirs(train_dataset_path, n_samples, n_fft, class_list, skip_export=skip_export)
+        train_image_dirs, train_label_dirs = build_yolo_dirs(train_dataset_path, n_samples, n_fft, class_list, skip_export=skip_export, force_yolo_label_larger=force_yolo_label_larger)
         
-        val_image_dirs, val_label_dirs = build_yolo_dirs(val_dataset_path, n_samples, n_fft, class_list, skip_export=skip_export)
+        val_image_dirs, val_label_dirs = build_yolo_dirs(val_dataset_path, n_samples, n_fft, class_list, skip_export=skip_export, force_yolo_label_larger=force_yolo_label_larger)
 
         train_image_dirs = [str(Path(Path.cwd(),t_dir)) for t_dir in train_image_dirs]
         val_image_dirs = [str(Path(Path.cwd(), v_dir)) for v_dir in val_image_dirs]
