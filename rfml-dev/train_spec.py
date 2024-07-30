@@ -28,7 +28,7 @@ def build_yolo_dirs(data_directories, n_samples, n_fft, class_list, skip_export=
             for f in tqdm(glob.glob(str(Path(data_directory,"*-meta")))):
                 d = Data(f)
                 d.generate_spectrograms(n_samples, n_fft, cmap_str="turbo", overwrite=False)
-                d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list, force_yolo_label_larger=True)
+                d.export_yolo(yolo_label_outdir, image_outdir=yolo_image_outdir, yolo_class_list=class_list, force_yolo_label_larger=force_yolo_label_larger)
     image_dirs = list(set(image_dirs))
     label_dirs = list(set(label_dirs))
     return image_dirs, label_dirs

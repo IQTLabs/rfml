@@ -109,8 +109,29 @@ experiments = {
         "train_dir": ["dev_data/torchsig_train/samples"],
         "val_dir": ["data/gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/test_iq_label"],
         "iq_epochs": 40,
-        "spec_epochs": 100,
+        "spec_epochs": 200,
+        "spec_yolo_augment": True,
         "notes": "DJI Mini2, Ettus B200Mini RX, train on copy of lab collection gamutrf/gamutrf-arl/01_30_23/mini2, validate on field collect gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/test_iq_label"
+    },
+    "experiment_10": {
+        "experiment_name": "experiment_10",
+        "class_list": ["wifi","anom_wifi"],
+        "train_dir": ["data/gamutrf/anom_wifi/train_gamutrf-nz-anon-wifi", "data/gamutrf/anom_wifi/train_gamutrf-nz-nonanon-wifi", "data/gamutrf/anom_wifi/train_gamutrf-wifi-and-anom-bladerf"],
+        "val_dir": ["data/gamutrf/anom_wifi/val_gamutrf-nz-anon-wifi", "data/gamutrf/anom_wifi/val_gamutrf-nz-nonanon-wifi"],
+        "iq_epochs": 40,
+        "spec_epochs": 70,
+        "spec_skip_export": True, # USE WITH CAUTION (but speeds up large directories significantly): skip after first run if using separate train/val directories 
+        "notes": "Wi-Fi vs anomalous Wi-Fi, train on both BladeRF TX & Ettus B200Mini RX and on Ettus B200Mini RX/TX, validate on Ettus B200Mini RX/TX, anarkiwi collect"
+    },
+    "experiment_11": {
+        "experiment_name": "experiment_11",
+        "class_list": ["wifi","anom_wifi"],
+        "train_dir": ["data/gamutrf/anom_wifi/train_gamutrf-nz-anon-wifi", "data/gamutrf/anom_wifi/train_gamutrf-nz-nonanon-wifi", "data/gamutrf/anom_wifi/train_gamutrf-wifi-and-anom-bladerf"],
+        "val_dir": ["data/gamutrf/anom_wifi/val_gamutrf-wifi-and-anom-bladerf"],
+        "iq_epochs": 40,
+        "spec_epochs": 70,
+        "spec_skip_export": True, # USE WITH CAUTION (but speeds up large directories significantly): skip after first run if using separate train/val directories 
+        "notes": "Wi-Fi vs anomalous Wi-Fi, train on both BladeRF TX & Ettus B200Mini RX and on Ettus B200Mini RX/TX, validate on BladeRF TX, anarkiwi collect"
     },
 }
 
