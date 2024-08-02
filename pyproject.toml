@@ -17,6 +17,8 @@ pyyaml = "^6.0.1"
 pillow = "^10.2.0"
 python-on-whales = "^0.69.0"
 sigmf = "^1.2.0"
+tqdm = "^4.66.4"
+cupy = "^13.2.0"
 
 
 [tool.poetry.group.dev.dependencies]

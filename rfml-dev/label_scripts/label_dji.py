@@ -3,6 +3,9 @@ import glob
 from pathlib import Path
 from tqdm import tqdm
 
+import os
+import sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import annotation_utils
 import data as data_class
 
@@ -14,7 +17,7 @@ data_globs = {
     # ],
     "mini2_video": [
         # "data/gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/test_iq_label/dji-mini2-200m-0deg-5735mhz-lp-50-gain_20p5Msps_craft_flying-1.raw.sigmf-meta",
-        "data/gamutrf/gamutrf-birdseye-field-days/pdx_field_day_2022_05_26/test_iq_label/*.sigmf-meta",
+        "/home/iqt/lberndt/gamutrf-depoly/data/samples/drone-30db/samples_1722545037.483000_2408703998Hz_20480000sps.raw.sigmf-meta",
     ]
 }
 
@@ -29,7 +32,7 @@ for label in data_globs:
             annotation_utils.reset_annotations(data_obj)
             annotation_utils.annotate(
                 f, 
-                label="mini2_video", 
+                label="mavic3_video", 
                 avg_window_len=256, 
                 avg_duration=0.25, 
                 debug=False, 
@@ -44,7 +47,7 @@ for label in data_globs:
             )
             annotation_utils.annotate(
                 f, 
-                label="mini2_telem",  
+                label="mavic3_telem",  
                 avg_window_len=256, 
                 avg_duration=0.25, 
                 debug=False, 

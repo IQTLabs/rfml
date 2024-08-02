@@ -18,9 +18,12 @@ def moving_average(complex_iq, window_len):
         np.convolve(np.abs(complex_iq) ** 2, np.ones(window_len), "valid") / window_len
     )
 
-def power_squelch(iq_samples, threshold, window):
-    avg_pwr = moving_average(iq_samples, window)
-    avg_pwr_db = 10 * np.log10(avg_pwr)
+def power_squelch(iq_samples, threshold, window,avg_pwr_db=None):
+    if avg_pwr_db is None:
+        avg_pwr = moving_average(iq_samples, window)
+        avg_pwr = [x for x in avg_pwr if x != 0]
+        avg_pwr_db = 10 * np.log10(avg_pwr)
+
 
     good_samples = np.zeros(len(iq_samples))
     good_samples[np.where(avg_pwr_db > threshold)] = 1
@@ -37,9 +40,9 @@ def reset_annotations(data_obj):
     print(f"Resetting annotations in {data_obj.sigmf_meta_filename}")
 
 
-def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip_validate=False, estimate_frequency=False, dry_run=False, min_annotation_length=400, spectral_energy_threshold=None, min_bandwidth=None, max_bandwidth=None, overwrite=True, max_annotations=None, dc_block=False, verbose=False):
+def annotate_power_squelch(data_obj, threshold, avg_window_len, avg_pwr_db=None, label=None, skip_validate=False, estimate_frequency=False, dry_run=False, min_annotation_length=400, spectral_energy_threshold=None, min_bandwidth=None, max_bandwidth=None, overwrite=True, max_annotations=None, dc_block=False, verbose=False):
     iq_samples = data_obj.get_samples()
-    idx = power_squelch(iq_samples, threshold=threshold, window=avg_window_len)
+    idx = power_squelch(iq_samples, threshold=threshold, window=avg_window_len, avg_pwr_db=avg_pwr_db)
 
     if overwrite:
         data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY] = []
@@ -92,7 +95,10 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
         iq_samples = data_obj.get_samples()
     
     avg_pwr = moving_average(iq_samples, avg_window_len)
+    avg_pwr = [x for x in avg_pwr if x != 0]
+    print(f"{len(avg_pwr)=}")
     avg_pwr_db = 10*np.log10(avg_pwr)
+    del avg_pwr
 
 
     # current threshold in custom_handler 
@@ -132,7 +138,7 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
         plt.title("Signal Power")
         plt.show()
 
-    annotate_power_squelch(data_obj, threshold_db, avg_window_len, label=label, skip_validate=True, estimate_frequency=estimate_frequency, spectral_energy_threshold=spectral_energy_threshold, min_bandwidth=min_bandwidth, max_bandwidth=max_bandwidth,  dry_run=dry_run, min_annotation_length=min_annotation_length, overwrite=overwrite, max_annotations=max_annotations, dc_block=dc_block, verbose=verbose)
+    annotate_power_squelch(data_obj, threshold_db, avg_window_len, avg_pwr_db=avg_pwr_db, label=label, skip_validate=True, estimate_frequency=estimate_frequency, spectral_energy_threshold=spectral_energy_threshold, min_bandwidth=min_bandwidth, max_bandwidth=max_bandwidth,  dry_run=dry_run, min_annotation_length=min_annotation_length, overwrite=overwrite, max_annotations=max_annotations, dc_block=dc_block, verbose=verbose)
     
 def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_energy_threshold=None, dc_block=False, verbose=False):
 

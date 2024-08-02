@@ -1,3 +1,12 @@
+## Building a Model
+
+### Label Data
+ use the [label_scripts](./label_scripts/) to automatically label the data
+ 
+
+
+
+
 
 ## Files
 
