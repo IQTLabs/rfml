@@ -149,7 +149,8 @@ class Data:
                     self.data_filename = str(
                         Path(os.path.dirname(self.sigmf_meta_filename), iq_source_files[0])
                     )
-                    self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
+                    # The .zst extention needs to be removed when creating the .sigmf-data file
+                    self.export_sigmf_data(output_path=os.path.splitext(self.data_filename)[0]  + ".sigmf-data")
             if not self.data_filename or not os.path.isfile(self.data_filename):
                 raise ValueError(f"File: {self.data_filename} is not a valid file.")
         elif self.filename.lower().endswith(".sigmf-data"):

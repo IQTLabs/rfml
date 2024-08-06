@@ -93,6 +93,8 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
     
     avg_pwr = moving_average(iq_samples, avg_window_len)
     avg_pwr_db = 10*np.log10(avg_pwr)
+    del(avg_pwr)
+    del(iq_samples)
 
 
     # current threshold in custom_handler 
@@ -159,7 +161,7 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_ener
     upper_idx = max_power_idx
     # print(f"{max_power_idx=}")
     while True:
-        # print(f"{lower_idx=}, {upper_idx=}, {freq_power_normalized[lower_idx]=}, {freq_power_normalized[upper_idx]=}")
+        #print(f"{lower_idx=}, {upper_idx=}, {freq_power_normalized[lower_idx]=}, {freq_power_normalized[upper_idx]=}, {spectral_energy_threshold=}")
         if upper_idx == freq_power_normalized.shape[0]-1:
             lower_idx -= 1
         elif lower_idx == 0: 
@@ -171,6 +173,7 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_ener
         
         if freq_power_normalized[lower_idx:upper_idx].sum() >= spectral_energy_threshold:
             break
+
                         
     freq_upper_edge = center_frequency - (freq_power.shape[0]/2 - upper_idx)/freq_power.shape[0]*sample_rate
     freq_lower_edge = center_frequency - (freq_power.shape[0]/2 - lower_idx)/freq_power.shape[0]*sample_rate
