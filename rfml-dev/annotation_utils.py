@@ -13,13 +13,13 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
-def moving_average(complex_iq, window_len):
+def moving_average(complex_iq, avg_window_len):
     return (
-        np.convolve(np.abs(complex_iq) ** 2, np.ones(window_len), "valid") / window_len
+        np.convolve(np.abs(complex_iq) ** 2, np.ones(avg_window_len), "valid") / avg_window_len
     )
 
-def power_squelch(iq_samples, threshold, window):
-    avg_pwr = moving_average(iq_samples, window)
+def power_squelch(iq_samples, threshold, avg_window_len):
+    avg_pwr = moving_average(iq_samples, avg_window_len)
     avg_pwr_db = 10 * np.log10(avg_pwr)
 
     good_samples = np.zeros(len(iq_samples))
@@ -39,11 +39,12 @@ def reset_annotations(data_obj):
 
 def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip_validate=False, estimate_frequency=False, dry_run=False, min_annotation_length=400, spectral_energy_threshold=None, min_bandwidth=None, max_bandwidth=None, overwrite=True, max_annotations=None, dc_block=False, verbose=False):
     iq_samples = data_obj.get_samples()
-    idx = power_squelch(iq_samples, threshold=threshold, window=avg_window_len)
+    idx = power_squelch(iq_samples, threshold=threshold, avg_window_len=avg_window_len)
 
     if overwrite:
         data_obj.sigmf_obj._metadata[data_obj.sigmf_obj.ANNOTATION_KEY] = []
     for start, stop in tqdm(idx[:max_annotations]):
+        #print(f"{start=}, {stop=}  {max_annotations=}")
         start, stop = int(start), int(stop)
         if min_annotation_length and (stop-start < min_annotation_length):
             continue
@@ -52,10 +53,13 @@ def annotate_power_squelch(data_obj, threshold, avg_window_len, label=None, skip
             freq_lower_edge, freq_upper_edge = get_occupied_bandwidth(iq_samples[start:stop], data_obj.metadata["global"]["core:sample_rate"], data_obj.metadata["captures"][0]["core:frequency"], spectral_energy_threshold=spectral_energy_threshold, dc_block=dc_block, verbose=verbose)
             bandwidth = freq_upper_edge - freq_lower_edge
             if min_bandwidth and bandwidth < min_bandwidth: 
+                if verbose:
+                    print(f"min_bandwidth - Skipping, {label}, {start=}, {stop=}, {bandwidth=}, {freq_upper_edge=}, {freq_lower_edge=}")
                 # print(f"Skipping, {label}, {start=}, {stop=}, {bandwidth=}, {freq_upper_edge=}, {freq_lower_edge=}")
                 continue
             if max_bandwidth and bandwidth > max_bandwidth: 
-                # print(f"Skipping, {label}, {start=}, {stop=}, {bandwidth=}, {freq_upper_edge=}, {freq_lower_edge=}")
+                if verbose:
+                    print(f"max_bandwidth - Skipping, {label}, {start=}, {stop=}, {bandwidth=}, {freq_upper_edge=}, {freq_lower_edge=}")
                 continue
             
         else: 
@@ -83,57 +87,58 @@ def annotate(filename, label, avg_window_len, avg_duration=-1, debug=False, dry_
     
     data_obj = data_class.Data(filename)
 
-    # use a seconds worth of data to calculate threshold
-    if avg_duration > -1:
-        iq_samples = data_obj.get_samples(n_samples=int(data_obj.metadata["global"]["core:sample_rate"]*avg_duration))
-        if iq_samples is None: 
-            iq_samples = data_obj.get_samples()
-    else:
-        iq_samples = data_obj.get_samples()
-    
-    avg_pwr = moving_average(iq_samples, avg_window_len)
-    avg_pwr_db = 10*np.log10(avg_pwr)
-    del(avg_pwr)
-    del(iq_samples)
-
-
-    # current threshold in custom_handler 
-    guess_threshold_old = (np.max(avg_pwr_db) + np.mean(avg_pwr_db))/2
-
-    # MAD estimator
-    def median_absolute_deviation(series):
-        mad = 1.4826 * np.median(np.abs(series - np.median(series)))
-        # sci_mad = scipy.stats.median_abs_deviation(series, scale="normal")
-        return np.median(series) + 6*mad
-
-    mad = median_absolute_deviation(avg_pwr_db)
 
     if force_threshold_db:
         threshold_db = force_threshold_db
     else:
+        # use a seconds worth of data to calculate threshold
+        if avg_duration > -1:
+            iq_samples = data_obj.get_samples(n_samples=int(data_obj.metadata["global"]["core:sample_rate"]*avg_duration))
+            if iq_samples is None: 
+                iq_samples = data_obj.get_samples()
+        else:
+            iq_samples = data_obj.get_samples()
+        
+        avg_pwr = moving_average(iq_samples, avg_window_len)
+        avg_pwr_db = 10*np.log10(avg_pwr)
+        del(avg_pwr)
+        del(iq_samples)
+
+
+        # current threshold in custom_handler 
+        guess_threshold_old = (np.max(avg_pwr_db) + np.mean(avg_pwr_db))/2
+
+        # MAD estimator
+        def median_absolute_deviation(series):
+            mad = 1.4826 * np.median(np.abs(series - np.median(series)))
+            # sci_mad = scipy.stats.median_abs_deviation(series, scale="normal")
+            return np.median(series) + 6*mad
+
+        mad = median_absolute_deviation(avg_pwr_db)
+
         threshold_db = mad
     
-    if debug:
-        print(f"{np.max(avg_pwr_db)=}")
-        print(f"{np.mean(avg_pwr_db)=}")
-        print(f"median absolute deviation threshold = {mad}")
-        print(f"using threshold = {threshold_db}")
-        # print(f"{len(avg_pwr_db)=}")
-        
-        plt.figure()
-        db_plot = avg_pwr_db[int(0*20.48e6):int(avg_duration*20.48e6)]
-        plt.plot(np.arange(len(db_plot))/data_obj.metadata["global"]["core:sample_rate"], db_plot)
-        plt.axhline(y = guess_threshold_old, color = 'g', linestyle = '-', label="old threshold") 
-        plt.axhline(y = np.mean(avg_pwr_db), color = 'r', linestyle = '-', label="average") 
-        plt.axhline(y = mad, color = 'b', linestyle = '-', label="median absolute deviation threshold") 
-        if force_threshold_db:
-            plt.axhline(y = force_threshold_db, color = 'yellow', linestyle = '-', label="force threshold db") 
-        plt.legend(loc="upper left")
-        plt.ylabel("dB")
-        plt.xlabel("time (seconds)")
-        plt.title("Signal Power")
-        plt.show()
-
+        if debug:
+            print(f"{np.max(avg_pwr_db)=}")
+            print(f"{np.mean(avg_pwr_db)=}")
+            print(f"median absolute deviation threshold = {mad}")
+            print(f"using threshold = {threshold_db}")
+            # print(f"{len(avg_pwr_db)=}")
+            
+            plt.figure()
+            db_plot = avg_pwr_db[int(0*20.48e6):int(avg_duration*20.48e6)]
+            plt.plot(np.arange(len(db_plot))/data_obj.metadata["global"]["core:sample_rate"], db_plot)
+            plt.axhline(y = guess_threshold_old, color = 'g', linestyle = '-', label="old threshold") 
+            plt.axhline(y = np.mean(avg_pwr_db), color = 'r', linestyle = '-', label="average") 
+            plt.axhline(y = mad, color = 'b', linestyle = '-', label="median absolute deviation threshold") 
+            if force_threshold_db:
+                plt.axhline(y = force_threshold_db, color = 'yellow', linestyle = '-', label="force threshold db") 
+            plt.legend(loc="upper left")
+            plt.ylabel("dB")
+            plt.xlabel("time (seconds)")
+            plt.title("Signal Power")
+            plt.show()
+    print(f"Using dB threshold = {threshold_db} for detecting signals to annotate")
     annotate_power_squelch(data_obj, threshold_db, avg_window_len, label=label, skip_validate=True, estimate_frequency=estimate_frequency, spectral_energy_threshold=spectral_energy_threshold, min_bandwidth=min_bandwidth, max_bandwidth=max_bandwidth,  dry_run=dry_run, min_annotation_length=min_annotation_length, overwrite=overwrite, max_annotations=max_annotations, dc_block=dc_block, verbose=verbose)
     
 def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_energy_threshold=None, dc_block=False, verbose=False):
@@ -174,6 +179,9 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_ener
         if freq_power_normalized[lower_idx:upper_idx].sum() >= spectral_energy_threshold:
             break
 
+        if lower_idx == 0 and upper_idx == freq_power_normalized.shape[0]-1:
+            print(f"Could not find spectral energy threshold - max was: {freq_power_normalized[lower_idx:upper_idx].sum()}")
+            break
                         
     freq_upper_edge = center_frequency - (freq_power.shape[0]/2 - upper_idx)/freq_power.shape[0]*sample_rate
     freq_lower_edge = center_frequency - (freq_power.shape[0]/2 - lower_idx)/freq_power.shape[0]*sample_rate

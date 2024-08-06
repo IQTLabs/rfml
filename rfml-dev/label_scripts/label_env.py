@@ -11,9 +11,12 @@ import data as data_class
 
 
 data_globs = {
-    "dji_samples": [
-        "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30db/samples_1722867361.666000_2408703998Hz_20480000sps.raw.sigmf-meta",
-        "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db/samples_1722883251.180000_2408703998Hz_20480000sps.raw.sigmf-meta"
+    # "mini2_video": [
+    #     "data/gamutrf/gamutrf-arl/01_30_23/mini2_iq_label/*.sigmf-meta",
+    # ],
+    "mini2_video": [
+        "/home/iqt/lberndt/gamutrf-depoly/data/samples/environment/samples_1722872733.648000_2408703998Hz_20480000sps.raw.sigmf-meta"
+        #"/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db/samples_1722883251.180000_2408703998Hz_20480000sps.raw.sigmf-meta"
     ]
 }
 
@@ -28,7 +31,7 @@ for label in data_globs:
             annotation_utils.reset_annotations(data_obj)
             annotation_utils.annotate(
                 f, 
-                label="mavic3_remoteid", 
+                label="environment", 
                 avg_window_len=256, 
                 avg_duration=0.10, 
                 debug=False, 
@@ -36,25 +39,11 @@ for label in data_globs:
                 spectral_energy_threshold=0.90, 
                 #force_threshold_db=-48, 
                 overwrite=True, 
-                min_bandwidth=1e5, 
-                max_bandwidth=2e6,
-                min_annotation_length=500, 
+                min_bandwidth=None, 
+                max_bandwidth=None, 
+                min_annotation_length=1000, 
                 # max_annotations=500, 
                 dc_block=True
             )
-            annotation_utils.annotate(
-                f, 
-                label="mavic3_video",  
-                avg_window_len=256, 
-                avg_duration=0.25, 
-                debug=False, 
-                estimate_frequency=True, 
-                spectral_energy_threshold=0.99, 
-                force_threshold_db=-38, 
-                overwrite=False, 
-                min_bandwidth=8e6, 
-                min_annotation_length=10000, 
-                # max_annotations=500, 
-                dc_block=True
-            )
+
             

@@ -8,7 +8,6 @@
 *.yaml
 *.txt
 *.json
-*.png
 *.mdb
 *-checkpoint.ipynb
 .DS_Store
