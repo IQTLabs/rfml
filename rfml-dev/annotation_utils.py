@@ -176,7 +176,7 @@ def get_occupied_bandwidth(samples, sample_rate, center_frequency, spectral_ener
         else: 
             upper_idx += 1
         
-        if freq_power_normalized[lower_idx:upper_idx].sum() >= spectral_energy_threshold:
+        if freq_power_normalized[lower_idx:upper_idx+1].sum() >= spectral_energy_threshold:
             break
 
         if lower_idx == 0 and upper_idx == freq_power_normalized.shape[0]-1:

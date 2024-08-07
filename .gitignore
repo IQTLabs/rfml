@@ -12,3 +12,7 @@
 *-checkpoint.ipynb
 .DS_Store
 .python-version
+experiment_logs/
+lightning_logs/
+spec_logs/
+

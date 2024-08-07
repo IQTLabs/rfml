@@ -2,16 +2,37 @@
 
 ## Poetry
 
+Follow the instructions here to install Poetry: https://python-poetry.org/docs/#installation
+
 ## Torchsig
 
-Download and install from [Github](https://github.com/TorchDSP/torchsig)
+Download from [Github](https://github.com/TorchDSP/torchsig) and then use Poetry to install it.
 
 ```
 git clone https://github.com/TorchDSP/torchsig.git
 cd torchsig
-sudo pip install .
+git checkout 8049b43
 ```
 
+Make you have the Poetry environment activated, using `poetry shell`, then run:
+
+```
+poetry add ./torchsig
+```
+
+(update it with the correct path the directoy where Torchsig is)
+
+## Torch Model Archiver
+
+Install the Torch Model Archiver:
+```
+sudo pip install torch-model-archiver
+```
+
+More information about this tool is available here: 
+https://github.com/pytorch/serve/blob/master/model-archiver/README.md
+
+## Inspectrum (optional)
 
 
 # Building a Model
