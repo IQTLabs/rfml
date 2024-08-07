@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser, BooleanOptionalAction
 from sigmf_pytorch_dataset import SigMFDataset
-from torchsig.utils.visualize import IQVisualizer, SpectrogramVisualizer, two_channel_to_complex
+#from torchsig.utils.visualize import IQVisualizer, SpectrogramVisualizer, two_channel_to_complex
 from torchsig.utils.dataset import SignalDataset
 from torchsig.datasets.sig53 import Sig53
 from torch.utils.data import DataLoader
@@ -33,7 +33,7 @@ import numpy as np
 import torchsig
 import torch
 import os
-from sigmf_db_dataset import SigMFDB
+#from sigmf_db_dataset import SigMFDB
 from sigmf_pytorch_dataset import SigMFDataset
 from models import ExampleNetwork
 
@@ -313,15 +313,15 @@ def visualize_dataset(dataset_path, num_iq_samples, logs_dir, class_list):
         shuffle=True,
     )
     
-    visualizer = IQVisualizer(
-        data_loader=data_loader
-    )
+    # visualizer = IQVisualizer(
+    #     data_loader=data_loader
+    # )
     
-    for figure in iter(visualizer):
-        figure.set_size_inches(16, 16)
-        plt.show()
-        plt.savefig(Path(logs_dir, "dataset.png"))
-        break
+    # for figure in iter(visualizer):
+    #     figure.set_size_inches(16, 16)
+    #     plt.show()
+    #     plt.savefig(Path(logs_dir, "dataset.png"))
+    #     break
 
 def argument_parser():
     parser = ArgumentParser()

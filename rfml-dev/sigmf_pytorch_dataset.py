@@ -9,8 +9,8 @@ import os
 import zstandard
 
 
-from torchsig.utils.types import SignalCapture, SignalDescription, SignalData
-from torchsig.utils.types import SignalCapture, SignalData
+from torchsig.utils.types import *
+
 from torchsig.utils.dataset import SignalDataset
 import torchsig.utils.reader as reader
 import torchsig.utils.index as indexer
@@ -40,7 +40,7 @@ def reader_from_zst(signal_capture: SignalCapture) -> SignalData:
                 if signal_capture.is_complex
                 else np.dtype(np.float64)
             ),
-            signal_description=signal_capture.signal_description,
+            metadata=signal_capture.metadata,
         )
 
 
@@ -116,7 +116,7 @@ class SigMFDataset(SignalDataset):
 
         return sampler
 
-    def get_data(self, signal_capture: SignalCapture) -> SignalData:
+    def get_data(self, signal_capture: SignalCapture) -> Signal:
         if signal_capture.absolute_path.endswith(".sigmf-data"):
             return reader.reader_from_sigmf(signal_capture)
         elif signal_capture.absolute_path.endswith(".zst"):
@@ -136,7 +136,7 @@ class SigMFDataset(SignalDataset):
         if self.target_transform:
             target = self.target_transform(target)
 
-        return signal_data.iq_data, target  # type: ignore
+        return signal_data["data"]["samples"], target  # type: ignore
 
     def __len__(self) -> int:
         return len(self.index)
@@ -243,11 +243,16 @@ class SigMFDataset(SignalDataset):
                     continue
 
                 sample_count = self.sample_count  # annotation["core:sample_count"]
-                signal_description = SignalDescription(
+                signal_metadata = create_modulated_rf_metadata(
                     sample_rate=meta["global"]["core:sample_rate"],
+                    upper_freq=annotation["core:freq_upper_edge"],
+                    lower_freq=annotation["core:freq_lower_edge"],
                 )
-                signal_description.upper_frequency = annotation["core:freq_upper_edge"]
-                signal_description.lower_frequency = annotation["core:freq_lower_edge"]
+                # signal_description = SignalDescription(
+                #     sample_rate=meta["global"]["core:sample_rate"],
+                # )
+                # signal_description.upper_frequency = annotation["core:freq_upper_edge"]
+                # signal_description.lower_frequency = annotation["core:freq_lower_edge"]
 
                 
 
@@ -268,7 +273,7 @@ class SigMFDataset(SignalDataset):
                         is_complex=(
                             True if "c" in meta["global"]["core:datatype"] else False
                         ),
-                        signal_description=signal_description,
+                        metadata=signal_metadata,
                     )
                     index.append((self._get_name_to_idx(label), signal))
 

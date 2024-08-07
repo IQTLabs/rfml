@@ -11,7 +11,7 @@ scikit-image = "^0.22.0"
 matplotlib = "^3.8.3"
 numpy = "^1.26.4"
 opencv-python = "^4.8.0.74"
-scipy = "^1.12.0"
+scipy = "1.11.4"
 zstandard = "^0.22.0"
 pyyaml = "^6.0.1"
 pillow = "^10.2.0"
@@ -19,7 +19,9 @@ python-on-whales = "^0.69.0"
 sigmf = "^1.2.0"
 tqdm = "^4.66.4"
 cupy = "^13.2.0"
-torchsig = {path = "../torchsig"}
+ultralytics = "^8.2.74"
+torchsig = {path = "torchsig"}
+
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"

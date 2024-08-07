@@ -9,8 +9,7 @@ import numpy as np
 from torchsig.datasets import conf
 from torchsig.datasets.modulations import ModulationsDataset
 from torchsig.transforms import Identity
-from torchsig.utils.types import SignalData, SignalDescription
-
+from torchsig.utils.types import SignalData
 
 class SigMFDB:
     """The Official Sig53 dataset
