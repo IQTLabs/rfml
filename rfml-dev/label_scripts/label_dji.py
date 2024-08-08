@@ -12,8 +12,10 @@ import data as data_class
 
 data_globs = {
     "dji_samples": [
-        "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30db/samples_1722867361.666000_2408703998Hz_20480000sps.raw.sigmf-meta",
-        "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db/samples_1722883251.180000_2408703998Hz_20480000sps.raw.sigmf-meta"
+        "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30gain/samples_1723144831.684000_2408703998Hz_20480000sps.raw.sigmf-meta",
+        "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-40gain/samples_1723144790.020000_2408703998Hz_20480000sps.raw.sigmf-meta"
+        # "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30db/samples_1722867361.666000_2408703998Hz_20480000sps.raw.sigmf-meta",
+        # "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db/samples_1722883251.180000_2408703998Hz_20480000sps.raw.sigmf-meta"
     ]
 }
 

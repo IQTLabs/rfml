@@ -9,6 +9,7 @@
 *.txt
 *.json
 *.mdb
+*.mar
 *-checkpoint.ipynb
 .DS_Store
 .python-version

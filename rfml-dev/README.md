@@ -90,6 +90,55 @@ Some tuning is needed for signals that have a short transmission duration and/or
 - The `average_duration` setting maybe too long and the signal is getting averaged into the noise. Try lowering this.
 - `min_bandwidth` is the minimum bandwidth (in Hz) for a signal to be detected. If this value is too high, signals that have less bandiwdth will be ignored. Try lowering this.
 
+### Training a Model
+
+After you have finished labeling your data, the next step is to train a model on it. This repo makes it easy to train both IQ and Spectragram based models from sigmf data. 
+
+#### Configure
+
+This repo provides an automated script for training and evaluating models. To do this, configure the [run_experiments.py](./run_experiments.py) file to point to the data you want to use and set the training parameters:
+
+```python
+    "experiment_0": {                                   # This is the Key to use, it needs to be `experiment_` followed by an increasing number
+        "experiment_name": "experiment_1",              # A name to refer to the experiment
+        "class_list": ["mavic3_video","mavic3_remoteid","environment"],     # The labels that are present in the sigmf-meta files
+        "train_dir": ["/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30db", "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db", "/home/iqt/lberndt/gamutrf-depoly/data/samples/environment"],  # The sigmf files to use, including the path to the file
+        "iq_epochs": 10,                # Number of epochs for IQ training, if it is 0 or None, it will be skipped
+        "spec_epochs": 10,              # Number of epochs for spctragram training, if it is 0 or None, it will be skipped
+        "notes": "DJI Mavic3 Detection" # Notes to your future self
+    }
+```
+
+Once you have the **run_experiments.py** file configured, run it:
+
+```bash
+python3 run_experiments.py
+```
+
+Once the training has completed, it will print out the logs location, model accuracy, and the location of the best checkpoint: 
+
+```bash
+I/Q TRAINING COMPLETE
+
+
+Find results in experiment_logs/experiment_1/iq_logs/08_08_2024_09_17_32
+
+Total Accuracy: 98.10%
+Best Model Checkpoint: /home/iqt/lberndt/rfml-dev-1/rfml-dev/lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
+```
+
+### Convert Model
+
+Once you have a trained model, you need to convert it into a portable format that can easily be served by TorchServe. To do this, use **convert_model.py**:
+
+```bash
+python3 convert_model.py --model_name=drone_detect --checkpoint=/home/iqt/lberndt/rfml-dev-1/rfml-dev/lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
+```
+This will export a **_torchscript.pt** file.
+
+```bash
+torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/
+```
 
 ## Files
 
