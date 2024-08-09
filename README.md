@@ -1,6 +1,6 @@
 # RFML
 
-This repo provides the pipeline for working with RF datasets, labeling them and training both IQ and spectragram based models. The SigMF standard is used for managing RF data and the labels/anotations on the data. It also make use ot the Torchsig framework for performing RF related augmentation of the data to help make the trained models more robust and functional in the real world.
+This repo provides the pipeline for working with RF datasets, labeling them and training both IQ and spectrogram based models. The SigMF standard is used for managing RF data and the labels/annotations on the data. It also make use ot the Torchsig framework for performing RF related augmentation of the data to help make the trained models more robust and functional in the real world.
  
 ## Preqs
 
@@ -24,7 +24,7 @@ Make you have the Poetry environment activated, using `poetry shell`, then run:
 poetry add ./torchsig
 ```
 
-(update it with the correct path the directoy where Torchsig is installed)
+(update it with the correct path the directory where Torchsig is installed)
 
 ### Torch Model Archiver
 
@@ -78,7 +78,7 @@ annotation_utils.annotate(
                 debug=False,    
                 estimate_frequency=True,            # Whether the frequency bounds for an annotation should be calculated. estimate_frequency needs to be enabled if you use min/max_bandwidth
                 spectral_energy_threshold=0.95,     # Percentage used to determine the upper and lower frequency bounds for an annotation
-                force_threshold_db=-58,             # Used to manually set the threshold used for detecting a signal and creating an annotation. If None, then the automatic threshold calcuation will be used instead.
+                force_threshold_db=-58,             # Used to manually set the threshold used for detecting a signal and creating an annotation. If None, then the automatic threshold calculation will be used instead.
                 overwrite=False,                    # If True, any existing annotations in the .sigmf-meta file will be removed
                 min_bandwidth=16e6,                 # The minimum bandwidth (in Hz) of a signal to annotate
                 max_bandwidth=None,                 # The maximum bandwidth (in Hz) of a signal to annotate
@@ -106,11 +106,11 @@ If the frequency bounds are not lining up with the top or bottom part of a signa
 Some tuning is needed for signals that have a short transmission duration and/or limited bandwidth. Here are a couple things to try if they are getting skipped:
 - `min_annotation_length` is the minimum number of samples for an annotation. If the signal is has less samples than this, it will not be annotated. Try lowering this.
 - The `average_duration` setting maybe too long and the signal is getting averaged into the noise. Try lowering this.
-- `min_bandwidth` is the minimum bandwidth (in Hz) for a signal to be detected. If this value is too high, signals that have less bandiwdth will be ignored. Try lowering this.
+- `min_bandwidth` is the minimum bandwidth (in Hz) for a signal to be detected. If this value is too high, signals that have less bandwidth will be ignored. Try lowering this.
 
 ## Training a Model
 
-After you have finished labeling your data, the next step is to train a model on it. This repo makes it easy to train both IQ and Spectragram based models from sigmf data. 
+After you have finished labeling your data, the next step is to train a model on it. This repo makes it easy to train both IQ and Spectrogram based models from sigmf data. 
 
 ### Configure
 
@@ -122,7 +122,7 @@ This repo provides an automated script for training and evaluating models. To do
         "class_list": ["mavic3_video","mavic3_remoteid","environment"],     # The labels that are present in the sigmf-meta files
         "train_dir": ["/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30db", "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db", "/home/iqt/lberndt/gamutrf-depoly/data/samples/environment"],  # The sigmf files to use, including the path to the file
         "iq_epochs": 10,                # Number of epochs for IQ training, if it is 0 or None, it will be skipped
-        "spec_epochs": 10,              # Number of epochs for spctragram training, if it is 0 or None, it will be skipped
+        "spec_epochs": 10,              # Number of epochs for spectrogram training, if it is 0 or None, it will be skipped
         "notes": "DJI Mavic3 Detection" # Notes to your future self
     }
 ```
@@ -145,7 +145,7 @@ Total Accuracy: 98.10%
 Best Model Checkpoint: /home/iqt/lberndt/rfml-dev-1/rfml-dev/lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
 ```
 
-### Convert Model
+### Convert & Export IQ Models
 
 Once you have a trained model, you need to convert it into a portable format that can easily be served by TorchServe. To do this, use **convert_model.py**:
 
@@ -157,6 +157,8 @@ This will export a **_torchscript.pt** file.
 ```bash
 torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/ -r custom_handler/requirements.txt
 ```
+
+This will generate a **.mar** file in the [models](./models/) folder. [GamutRF](https://github.com/IQTLabs/gamutRF) can run this model and use it to classify signals.
 
 ## Files
 
