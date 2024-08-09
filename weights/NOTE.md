@@ -1,0 +1,1 @@
+Note: model wieghts will be exported from checkpoints here by the `convert_model.py` script. 
