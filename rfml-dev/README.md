@@ -1,10 +1,14 @@
-# Preqs
+# RFML
 
-## Poetry
+This repo provides the pipeline for working with RF datasets, labeling them and training both IQ and spectragram based models. The SigMF standard is used for managing RF data and the labels/anotations on the data. It also make use ot the Torchsig framework for performing RF related augmentation of the data to help make the trained models more robust and functional in the real world.
+ 
+## Preqs
+
+### Poetry
 
 Follow the instructions here to install Poetry: https://python-poetry.org/docs/#installation
 
-## Torchsig
+### Torchsig
 
 Download from [Github](https://github.com/TorchDSP/torchsig) and then use Poetry to install it.
 
@@ -22,7 +26,7 @@ poetry add ./torchsig
 
 (update it with the correct path the directoy where Torchsig is)
 
-## Torch Model Archiver
+### Torch Model Archiver
 
 Install the Torch Model Archiver:
 ```
@@ -32,7 +36,11 @@ sudo pip install torch-model-archiver
 More information about this tool is available here: 
 https://github.com/pytorch/serve/blob/master/model-archiver/README.md
 
-## Inspectrum (optional)
+### Inspectrum (optional)
+
+This utility is useful for inspecting sigmf files and the annotations that the auto label scripts make.
+https://github.com/miek/inspectrum
+
 
 
 # Building a Model
@@ -47,9 +55,9 @@ Our current approach is to capture samples of the background RF environment and 
 The scripts in the [label_scripts](./label_scripts/) use signal processing to automatically label IQ data. The scripts looks at the signal power to detect when there is a signal present in the IQ data. When a signal is detected, the script will look at the frequencies for that set of samples and find the upper and lower bounds.
 
 
+### Tunning Autolabeling
 
-
-### Annotation Explained
+In the Labeling Scripts, the settings for autolabeling need to be tuned for the type of signals that were collected.
 
 ```python
 annotation_utils.annotate(
@@ -70,7 +78,7 @@ annotation_utils.annotate(
             )
 ```
 
-### Configuring Annotation
+### Tips for Tuning Autolabeling
 
 #### Force Threshold dB
 ![low threshold](./images/low_threshold.png)
@@ -90,11 +98,11 @@ Some tuning is needed for signals that have a short transmission duration and/or
 - The `average_duration` setting maybe too long and the signal is getting averaged into the noise. Try lowering this.
 - `min_bandwidth` is the minimum bandwidth (in Hz) for a signal to be detected. If this value is too high, signals that have less bandiwdth will be ignored. Try lowering this.
 
-### Training a Model
+## Training a Model
 
 After you have finished labeling your data, the next step is to train a model on it. This repo makes it easy to train both IQ and Spectragram based models from sigmf data. 
 
-#### Configure
+### Configure
 
 This repo provides an automated script for training and evaluating models. To do this, configure the [run_experiments.py](./run_experiments.py) file to point to the data you want to use and set the training parameters:
 
@@ -137,7 +145,7 @@ python3 convert_model.py --model_name=drone_detect --checkpoint=/home/iqt/lbernd
 This will export a **_torchscript.pt** file.
 
 ```bash
-torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/
+torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/ -r custom_handler/requirements.txt
 ```
 
 ## Files

@@ -10,7 +10,7 @@ from train_spec import *
 experiments = {
     "experiment_0": {
         "experiment_name": "experiment_1",
-        "class_list": ["mavic3_video","mavic3_remoteid","environment"],
+        "class_list": ["mavic3_video","environment"],
         "train_dir": ["/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30db", "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db",  "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30gain",  "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-40gain", "/home/iqt/lberndt/gamutrf-depoly/data/samples/environment"],
         "iq_epochs": 10,
         "spec_epochs": 0,

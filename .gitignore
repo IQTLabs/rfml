@@ -17,3 +17,4 @@ experiment_logs/
 lightning_logs/
 spec_logs/
 
+rfml-dev/.README.md.swp
