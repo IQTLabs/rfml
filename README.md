@@ -1,8 +1,8 @@
 # RFML
 
-This repo provides the pipeline for working with RF datasets, labeling them and training both IQ and spectrogram based models. The SigMF standard is used for managing RF data and the labels/annotations on the data. It also make use ot the Torchsig framework for performing RF related augmentation of the data to help make the trained models more robust and functional in the real world.
+This repo provides the pipeline for working with RF datasets, labeling them and training both IQ and spectrogram based models. The SigMF standard is used for managing RF data and the labels/annotations on the data. It also uses the Torchsig framework for performing RF related augmentation of the data to help make the trained models more robust and functional in the real world.
  
-## Preqs
+## Prerequisites
 
 ### Poetry
 
@@ -26,48 +26,57 @@ poetry add ./torchsig
 
 (update it with the correct path the directory where Torchsig is installed)
 
-### Torch Model Archiver
-
-Install the Torch Model Archiver:
-```
-sudo pip install torch-model-archiver
-```
-
-More information about this tool is available here: 
-https://github.com/pytorch/serve/blob/master/model-archiver/README.md
 
 ### Inspectrum (optional)
 
-This utility is useful for inspecting sigmf files and the annotations that the auto label scripts make.
 https://github.com/miek/inspectrum
 
+This utility is useful for inspecting sigmf files and the annotations that the auto label scripts make.
 
-## Start Virtual Env
 
-To start-up the virtual environment with all of the Python modules configured, run the following:
+
+### Anylabelling (optional)
+https://github.com/vietanhdev/anylabeling
+
+This program is used for image annotation and offers AI-assisted labelling. 
+
+
+## Activate virtual environment 
+
+This project uses Poetry for dependency management and packaging. Poetry can be used with external virtual environments. 
+If using a non-Poetry virtual environment, start by activating the environment before running Poetry commands. See note in [Poetry docs](https://python-poetry.org/docs/basic-usage/#using-your-virtual-environment) for more info. 
+
+
+### Using Poetry
+
+To activate the Poetry virtual environment with all of the Python modules configured, run the following:
+
+```bash
+poetry shell
+```
+See [Poetry docs](https://python-poetry.org/docs/basic-usage/#activating-the-virtual-environment) for more information. 
+
+## Install
 
 ```bash
 poetry install
-poetry shell
-jupyter notebook
 ```
 
 
-# Building a Model
+# Building a model
 
 
 ## Approach
 
-Our current approach is to capture samples of the background RF environment and then also isolate signals of interest and capture samples of each of the signals. The same label will be applied to all of the signals present in the background environment samples. We use this to essentially teach the model to ignore those signals. For this to work, it is important that none of the signals of interest are present. Since it is really tough these days to find an RF free environment, we have build a mini-faraday cage enclosure by lining the inside of a pelican case with foil. There are lots of instructions, like [this one](https://mosequipment.com/blogs/blog/build-your-own-faraday-cage), available online if you want to build your own. With this, the signal will be very strong, so make sure you adjust the SDR's gain appropriately.
+Our current approach is to capture examples of signals of interest to create labeled datasets. There are many methods for doing this and many challenges to consider. One practical method for accomplishing this is to isolate signals of interest and compare those to a specific background RF environment. For simplicity we apply the same label to all the signals present in the background environment samples. We use this to essentially teach the model to ignore those signals. For this to work, it is important that the signals of interest are isolated from the background RF environment. Since it is really tough these days to find an RF free environment, we have build a mini-faraday cage enclosure by lining the inside of a pelican case with foil. There are lots of instructions, like [this one](https://mosequipment.com/blogs/blog/build-your-own-faraday-cage), available online if you want to build your own. With this, the signal will be very strong, so make sure you adjust the SDR's gain appropriately.
 
 ## Labeling IQ Data
 
-The scripts in the [label_scripts](./label_scripts/) use signal processing to automatically label IQ data. The scripts looks at the signal power to detect when there is a signal present in the IQ data. When a signal is detected, the script will look at the frequencies for that set of samples and find the upper and lower bounds.
+The scripts in [label_scripts](./label_scripts/) use signal processing to automatically label IQ data. The scripts looks at the signal power to detect when there is a signal present in the IQ data and estimate the occupied bandwidth of the signal. 
 
+### Tuning Autolabeling
 
-### Tunning Autolabeling
-
-In the Labeling Scripts, the settings for autolabeling need to be tuned for the type of signals that were collected.
+In the labeling scripts, the settings for autolabeling need to be tuned for the type of signals that were collected.
 
 ```python
 annotation_utils.annotate(
@@ -117,12 +126,11 @@ After you have finished labeling your data, the next step is to train a model on
 This repo provides an automated script for training and evaluating models. To do this, configure the [run_experiments.py](./run_experiments.py) file to point to the data you want to use and set the training parameters:
 
 ```python
-    "experiment_0": {                                   # This is the Key to use, it needs to be `experiment_` followed by an increasing number
-        "experiment_name": "experiment_1",              # A name to refer to the experiment
-        "class_list": ["mavic3_video","mavic3_remoteid","environment"],     # The labels that are present in the sigmf-meta files
-        "train_dir": ["/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-30db", "/home/iqt/lberndt/gamutrf-depoly/data/samples/mavic-0db", "/home/iqt/lberndt/gamutrf-depoly/data/samples/environment"],  # The sigmf files to use, including the path to the file
-        "iq_epochs": 10,                # Number of epochs for IQ training, if it is 0 or None, it will be skipped
-        "spec_epochs": 10,              # Number of epochs for spectrogram training, if it is 0 or None, it will be skipped
+    "experiment_0": { # A name to refer to the experiment
+        "class_list": ["mavic3_video","mavic3_remoteid","environment"], # The labels that are present in the sigmf-meta files
+        "train_dir": ["data/samples/mavic-30db", "data/samples/mavic-0db", "data/samples/environment"], # Directory with SigMF files
+        "iq_epochs": 10, # Number of epochs for IQ training, if it is 0 or None, it will be skipped
+        "spec_epochs": 10, # Number of epochs for spectrogram training, if it is 0 or None, it will be skipped
         "notes": "DJI Mavic3 Detection" # Notes to your future self
     }
 ```
@@ -142,7 +150,7 @@ I/Q TRAINING COMPLETE
 Find results in experiment_logs/experiment_1/iq_logs/08_08_2024_09_17_32
 
 Total Accuracy: 98.10%
-Best Model Checkpoint: /home/iqt/lberndt/rfml-dev-1/rfml-dev/lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
+Best Model Checkpoint: lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
 ```
 
 ### Convert & Export IQ Models
@@ -150,7 +158,7 @@ Best Model Checkpoint: /home/iqt/lberndt/rfml-dev-1/rfml-dev/lightning_logs/vers
 Once you have a trained model, you need to convert it into a portable format that can easily be served by TorchServe. To do this, use **convert_model.py**:
 
 ```bash
-python3 convert_model.py --model_name=drone_detect --checkpoint=/home/iqt/lberndt/rfml-dev-1/rfml-dev/lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
+python3 convert_model.py --model_name=drone_detect --checkpoint=lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
 ```
 This will export a **_torchscript.pt** file.
 
@@ -158,7 +166,7 @@ This will export a **_torchscript.pt** file.
 torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/ -r custom_handler/requirements.txt
 ```
 
-This will generate a **.mar** file in the [models](./models/) folder. [GamutRF](https://github.com/IQTLabs/gamutRF) can run this model and use it to classify signals.
+This will generate a **.mar** file in the [models/](./models/) folder. [GamutRF](https://github.com/IQTLabs/gamutRF) can run this model and use it to classify signals.
 
 ## Files
 
@@ -187,5 +195,5 @@ This will generate a **.mar** file in the [models](./models/) folder. [GamutRF](
 
 [zst_parse.py](zst_parse.py) - ZST file parsing tool, for GamutRF-style filenames  
 
-The [experiments](./experiments/) contains various experiments we have conducted during development.
+The [notebooks/](./notebooks/) directory contains various experiments we have conducted during development.
 

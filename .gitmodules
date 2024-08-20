@@ -1,0 +1,3 @@
+[submodule "torchsig"]
+	path = torchsig
+	url = https://github.com/TorchDSP/torchsig
