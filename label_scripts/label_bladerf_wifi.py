@@ -3,7 +3,7 @@ import glob
 from pathlib import Path
 from tqdm import tqdm
 
-import annotation_utils
+import rfml.annotation_utils as annotation_utils
 
 s3_data = {
     "anom_wifi": [

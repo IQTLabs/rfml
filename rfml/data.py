@@ -21,9 +21,9 @@ from PIL import Image
 from python_on_whales import docker
 from tqdm import tqdm
 
-from auto_label import auto_label, auto_label_configs
-from zst_parse import parse_zst_filename
-from spectrogram import spectrogram, spectrogram_cmap
+from rfml.auto_label import auto_label, auto_label_configs
+from rfml.zst_parse import parse_zst_filename
+from rfml.spectrogram import spectrogram, spectrogram_cmap
 
 SIGMF_META_DEFAULT = {
     "global": {  # https://github.com/sigmf/SigMF/blob/sigmf-v1.x/sigmf-spec.md#global-object

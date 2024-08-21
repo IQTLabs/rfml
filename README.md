@@ -2,6 +2,7 @@
 
 This repo provides the pipeline for working with RF datasets, labeling them and training both IQ and spectrogram based models. The SigMF standard is used for managing RF data and the labels/annotations on the data. It also uses the Torchsig framework for performing RF related augmentation of the data to help make the trained models more robust and functional in the real world.
  
+
 ## Prerequisites
 
 ### Poetry
@@ -44,8 +45,21 @@ See [Poetry docs](https://python-poetry.org/docs/basic-usage/#activating-the-vir
 git clone https://github.com/IQTLabs/rfml-dev.git
 cd rfml-dev
 git submodule update --init --recursive
-poetry add ./torchsig
 poetry install
+```
+
+## Verify install with GPU support (optional)
+
+```bash
+$ python -c 'import torch; print(torch.cuda.is_available())'
+True
+```
+
+If the output does not match or errors occur, try installing Pytorch manually ([current version](https://pytorch.org/get-started/locally/) or [previous versions](https://pytorch.org/get-started/previous-versions/)).
+#### Example
+
+```bash
+pip install torch==2.0.1 torchvision==0.15.2
 ```
 
 

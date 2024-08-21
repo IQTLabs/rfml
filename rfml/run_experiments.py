@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from experiment import * 
-from train_iq import *
-from train_spec import *
+from rfml.experiment import * 
+from rfml.train_iq import *
+from rfml.train_spec import *
 
 
 # Ensure that data directories have sigmf-meta files with annotations 

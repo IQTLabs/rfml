@@ -5,8 +5,8 @@ from tqdm import tqdm
 import os
 import sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-import annotation_utils
-import data as data_class
+import rfml.annotation_utils as annotation_utils
+import rfml.data as data_class
 
 
 

@@ -1,6 +1,6 @@
 # Tests and helper scripts for data.py
 
-from data import Data, labels_to_sigmf, yield_label_metadata
+from rfml.data import Data, labels_to_sigmf, yield_label_metadata
 
 
 def test_spectrogram_generation(filename):

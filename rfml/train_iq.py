@@ -1,7 +1,7 @@
 # I/Q model training script
 
 from argparse import ArgumentParser, BooleanOptionalAction
-from sigmf_pytorch_dataset import SigMFDataset
+from rfml.sigmf_pytorch_dataset import SigMFDataset
 from torchsig.utils.visualize import IQVisualizer, SpectrogramVisualizer, two_channel_to_complex
 from torchsig.utils.dataset import SignalDataset
 from torchsig.datasets.sig53 import Sig53
@@ -33,9 +33,8 @@ import numpy as np
 import torchsig
 import torch
 import os
-from sigmf_db_dataset import SigMFDB
-from sigmf_pytorch_dataset import SigMFDataset
-from models import ExampleNetwork
+from rfml.sigmf_pytorch_dataset import SigMFDataset
+from rfml.models import ExampleNetwork
 
 from torchsig.transforms import (
     Compose,
