@@ -3,8 +3,8 @@ import glob
 from pathlib import Path
 from tqdm import tqdm
 
-import annotation_utils
-import data as data_class
+import rfml.annotation_utils as annotation_utils
+import rfml.data as data_class
 
 
 

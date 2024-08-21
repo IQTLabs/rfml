@@ -8,8 +8,13 @@
 *.yaml
 *.txt
 *.json
-*.png
 *.mdb
+*.mar
 *-checkpoint.ipynb
 .DS_Store
 .python-version
+experiment_logs/
+lightning_logs/
+spec_logs/
+
+rfml-dev/.README.md.swp

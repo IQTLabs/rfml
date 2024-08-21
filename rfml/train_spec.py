@@ -5,7 +5,7 @@ import random
 import yaml
 from pathlib import Path
 from tqdm import tqdm
-from data import *
+from rfml.data import *
 import shutil
 
 
