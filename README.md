@@ -8,24 +8,6 @@ This repo provides the pipeline for working with RF datasets, labeling them and 
 
 Follow the instructions here to install Poetry: https://python-poetry.org/docs/#installation
 
-### Torchsig
-
-Download from [Github](https://github.com/TorchDSP/torchsig) and then use Poetry to install it. The most recent version of Torchsig is not supported and version 0.4.1 should be used instead. 
-
-```
-git clone https://github.com/TorchDSP/torchsig.git
-cd torchsig
-git checkout 8049b43
-```
-
-Make you have the Poetry environment activated, using `poetry shell`, then run:
-
-```
-poetry add ./torchsig
-```
-
-(update it with the correct path the directory where Torchsig is installed)
-
 
 ### Inspectrum (optional)
 
@@ -59,6 +41,10 @@ See [Poetry docs](https://python-poetry.org/docs/basic-usage/#activating-the-vir
 ## Install
 
 ```bash
+git clone https://github.com/IQTLabs/rfml-dev.git
+cd rfml-dev
+git submodule update --init --recursive
+poetry add ./torchsig
 poetry install
 ```
 
