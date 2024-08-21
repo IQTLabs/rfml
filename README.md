@@ -2,6 +2,21 @@
 
 This repo provides the pipeline for working with RF datasets, labeling them and training both IQ and spectrogram based models. The SigMF standard is used for managing RF data and the labels/annotations on the data. It also uses the Torchsig framework for performing RF related augmentation of the data to help make the trained models more robust and functional in the real world.
  
+[Prerequisites](#prerequisites)
+
+[Virtual environment](#activate-virtual-environment)
+
+[Install](#install)
+
+[Verify install with GPU support](#verify-install-with-gpu-support-optional)
+
+[Building a model](#building-a-model)
+
+[Labelling I/Q data](#labeling-iq-data)
+
+[Training a model](#training-a-model)
+
+[Files](#files)
 
 ## Prerequisites
 
