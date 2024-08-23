@@ -1,0 +1,28 @@
+name: CI Test
+on: [push, pull_request]
+jobs:
+  ci-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: false
+          virtualenvs-in-project: false
+          version: 1.8.3
+      - name: Install poetry and dependencies
+        # TODO: remove workaround for https://github.com/pytorch/pytorch/issues/100974 once torch upgraded.
+        run: |
+          git submodule init && \
+          git submodule update && \
+          poetry config virtualenvs.create false && \
+          poetry install && \
+          for i in torch ; do poetry run pip install --no-cache-dir "$i"=="$(grep $i pyproject.toml | grep -Eo '\"[0-9\.]+' | sed 's/\"//g')" || exit 1 ; done
+          python3 -c "import torch"
