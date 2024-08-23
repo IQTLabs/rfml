@@ -17,8 +17,9 @@ jobs:
           virtualenvs-create: false
           virtualenvs-in-project: false
           version: 1.8.3
-      - name: Install poetry dependencies
+      - name: Install poetry and dependencies
         run: |
+          apt-get -yq update && apt-get -yq libcurand\* libcublas\* && \
           git submodule init && \
           git submodule update && \
           poetry config virtualenvs.create false && \
