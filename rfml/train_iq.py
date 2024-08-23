@@ -2,7 +2,11 @@
 
 from argparse import ArgumentParser, BooleanOptionalAction
 from rfml.sigmf_pytorch_dataset import SigMFDataset
-from torchsig.utils.visualize import IQVisualizer, SpectrogramVisualizer, two_channel_to_complex
+from torchsig.utils.visualize import (
+    IQVisualizer,
+    SpectrogramVisualizer,
+    two_channel_to_complex,
+)
 from torchsig.utils.dataset import SignalDataset
 from torchsig.datasets.sig53 import Sig53
 from torch.utils.data import DataLoader
@@ -16,6 +20,7 @@ from pathlib import Path
 import torchmetrics
 
 from torchsig.models.iq_models.efficientnet.efficientnet import efficientnet_b4
+
 # from lightning.pytorch.callbacks import DeviceStatsMonitor
 from torchsig.utils.cm_plotter import plot_confusion_matrix
 from pytorch_lightning.callbacks import ModelCheckpoint, DeviceStatsMonitor
@@ -62,37 +67,37 @@ from torchsig.transforms import (
 # logs_dir.mkdir(parents=True)
 
 # epochs = 40
-# batch_size = 180 
+# batch_size = 180
 # class_list = ['anom_wifi','wifi']
-
-
 
 
 def train_iq(
     train_dataset_path,
-    val_dataset_path = None, 
-    num_iq_samples = 1024, 
-    only_use_start_of_burst = True,
-    epochs = 40, 
-    batch_size = 180, 
-    class_list = None, 
-    logs_dir = None, 
-    output_dir = None,
+    val_dataset_path=None,
+    num_iq_samples=1024,
+    only_use_start_of_burst=True,
+    epochs=40,
+    batch_size=180,
+    class_list=None,
+    logs_dir=None,
+    output_dir=None,
 ):
     print(f"\n\nSTARTING I/Q TRAINING\n\n")
     if logs_dir is None:
-        logs_dir = datetime.now().strftime('iq_logs/%m_%d_%Y_%H_%M_%S')
+        logs_dir = datetime.now().strftime("iq_logs/%m_%d_%Y_%H_%M_%S")
     if output_dir is None:
         output_dir = "./"
     output_dir = Path(output_dir)
-    logs_dir = Path(output_dir,logs_dir)
+    logs_dir = Path(output_dir, logs_dir)
     logs_dir.mkdir(parents=True, exist_ok=True)
-    
-    visualize_dataset(train_dataset_path, num_iq_samples, logs_dir, class_list=class_list)
+
+    visualize_dataset(
+        train_dataset_path, num_iq_samples, logs_dir, class_list=class_list
+    )
 
     # # SigMF based Model Training
-    
-    eb_no=False
+
+    eb_no = False
     level2 = Compose(
         [
             RandomApply(RandomPhaseShift((-1, 1)), 0.9),
@@ -114,41 +119,39 @@ def train_iq(
                 RandomResample((0.75, 1.5), num_iq_samples=num_iq_samples),
                 0.5,
             ),
-            #TargetSNR((-2, 30), eb_no=eb_no),
+            # TargetSNR((-2, 30), eb_no=eb_no),
             Normalize(norm=np.inf),
             ComplexTo2D(),
         ]
     )
-    
-    
+
     # ### Load the SigMF File dataset
     # and generate the class list
-    
-    
+
     # transform = ST.Compose([
     #     # ST.RandomPhaseShift(phase_offset=(-1, 1)),
     #     ST.Normalize(norm=np.inf),
     #     ST.ComplexTo2D(),
     # ])
 
-    val_transform = ST.Compose([
-        ST.Normalize(norm=np.inf),
-        ST.ComplexTo2D(),
-    ])
+    val_transform = ST.Compose(
+        [
+            ST.Normalize(norm=np.inf),
+            ST.ComplexTo2D(),
+        ]
+    )
     train_transform = level2
-    
-    
-    
+
     ###
     if val_dataset_path:
-        train_dataset = SigMFDataset( 
+        train_dataset = SigMFDataset(
             root=train_dataset_path,
             sample_count=num_iq_samples,
             transform=train_transform,
             only_first_samples=only_use_start_of_burst,
             class_list=class_list,
         )
-        val_dataset = SigMFDataset( 
+        val_dataset = SigMFDataset(
             root=val_dataset_path,
             sample_count=num_iq_samples,
             transform=val_transform,
@@ -156,38 +159,46 @@ def train_iq(
             class_list=class_list,
         )
         sampler = train_dataset.get_weighted_sampler()
-        
+
         train_class_counts = train_dataset.get_class_counts()
-        train_class_counts = {train_dataset.class_list[k]:v for k,v in train_class_counts.items()}
+        train_class_counts = {
+            train_dataset.class_list[k]: v for k, v in train_class_counts.items()
+        }
         val_class_counts = val_dataset.get_class_counts()
-        val_class_counts = {val_dataset.class_list[k]:v for k,v in val_class_counts.items()}
+        val_class_counts = {
+            val_dataset.class_list[k]: v for k, v in val_class_counts.items()
+        }
 
         class_list = class_list if class_list else train_dataset.class_list
     ###
     else:
-        dataset = SigMFDataset( 
+        dataset = SigMFDataset(
             root=train_dataset_path,
             sample_count=num_iq_samples,
             transform=train_transform,
             only_first_samples=only_use_start_of_burst,
-            class_list=class_list,    
+            class_list=class_list,
         )
-    
+
         train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.8, 0.2])
         sampler = dataset.get_weighted_sampler(indices=train_dataset.indices)
 
         train_class_counts = dataset.get_class_counts(indices=train_dataset.indices)
-        train_class_counts = {dataset.class_list[k]:v for k,v in train_class_counts.items()}
+        train_class_counts = {
+            dataset.class_list[k]: v for k, v in train_class_counts.items()
+        }
         val_class_counts = dataset.get_class_counts(indices=val_dataset.indices)
-        val_class_counts = {dataset.class_list[k]:v for k,v in val_class_counts.items()}
+        val_class_counts = {
+            dataset.class_list[k]: v for k, v in val_class_counts.items()
+        }
 
         class_list = class_list if class_list else dataset.class_list
-        
+
     print(f"{len(train_dataset)=}, {train_class_counts=}")
     print(f"{len(val_dataset)=}, {val_class_counts=}")
-    
+
     train_dataloader = DataLoader(
-        dataset=train_dataset, 
+        dataset=train_dataset,
         batch_size=batch_size,
         num_workers=16,
         sampler=sampler,
@@ -195,28 +206,31 @@ def train_iq(
         drop_last=True,
     )
     val_dataloader = DataLoader(
-        dataset=val_dataset, 
+        dataset=val_dataset,
         batch_size=batch_size,
         num_workers=16,
         shuffle=False,
         drop_last=True,
     )
-    
-    
+
     model = efficientnet_b4(
         pretrained=True,
         path="efficientnet_b4.pt",
         num_classes=len(class_list),
     )
-    #model.classifier = torch.nn.Linear(in_features=model.classifier.in_features, out_features=len(class_list), bias=True)
-    
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # model.classifier = torch.nn.Linear(in_features=model.classifier.in_features, out_features=len(class_list), bias=True)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    
-    
-    example_model = ExampleNetwork(model, train_dataloader, val_dataloader, num_classes=len(class_list), logs_dir=logs_dir)
-    
-    
+
+    example_model = ExampleNetwork(
+        model,
+        train_dataloader,
+        val_dataloader,
+        num_classes=len(class_list),
+        logs_dir=logs_dir,
+    )
+
     # Setup checkpoint callbacks
     checkpoint_filename = f"{str(output_dir)}/iq_checkpoints/checkpoint"
     checkpoint_callback = ModelCheckpoint(
@@ -226,24 +240,28 @@ def train_iq(
         mode="min",
     )
     # Create and fit trainer
-    
+
     trainer = Trainer(
-        max_epochs=epochs, callbacks=[DeviceStatsMonitor(),checkpoint_callback], accelerator="gpu", devices=1, profiler="simple"
+        max_epochs=epochs,
+        callbacks=[DeviceStatsMonitor(), checkpoint_callback],
+        accelerator="gpu",
+        devices=1,
+        profiler="simple",
     )
     trainer.fit(example_model)
-    
+
     # checkpoint_callback.best_model_path
-    
-    
+
     # ## Evaluate the Trained Model
-    
-    
+
     # Load best checkpoint
-    checkpoint = torch.load(checkpoint_callback.best_model_path, map_location=lambda storage, loc: storage)
+    checkpoint = torch.load(
+        checkpoint_callback.best_model_path, map_location=lambda storage, loc: storage
+    )
     example_model.load_state_dict(checkpoint["state_dict"], strict=False)
     example_model = example_model.eval()
     example_model = example_model.cuda() if torch.cuda.is_available() else example_model
-    
+
     # Infer results over validation set
     num_test_examples = len(val_dataset)
     # num_classes = 5 #len(list(Sig53._idx_to_name_dict.values()))
@@ -254,87 +272,92 @@ def train_iq(
     y_preds_list = []
     with torch.no_grad():
         example_model.eval()
-        #for i in tqdm(range(0,num_test_examples)):
+        # for i in tqdm(range(0,num_test_examples)):
         for data, label in tqdm(val_dataloader):
             # Retrieve data
             # idx = i # Use index if evaluating over full dataset
             # data, label = val_dataset[idx]
             # Infer
             data = data.float()
-            #data = torch.from_numpy(data).float()
-            #data = torch.from_numpy(np.expand_dims(data,0)).float()
+            # data = torch.from_numpy(data).float()
+            # data = torch.from_numpy(np.expand_dims(data,0)).float()
             data = data.cuda() if torch.cuda.is_available() else data
             pred_tmp = example_model.predict(data)
             pred_tmp = pred_tmp.cpu().numpy() if torch.cuda.is_available() else pred_tmp
-    
+
             y_preds_list.extend(np.argmax(pred_tmp, axis=1).tolist())
             y_true_list.extend(label.tolist())
             # # Argmax
             # y_preds[i] = np.argmax(pred_tmp)
             # # Store label
             # y_true[i] = label
-    
+
     y_preds = y_preds_list
     y_true = y_true_list
-    
-    acc = np.sum(np.asarray(y_preds)==np.asarray(y_true))/len(y_true)
+
+    acc = np.sum(np.asarray(y_preds) == np.asarray(y_true)) / len(y_true)
     plot_confusion_matrix(
-        y_true, 
-        y_preds, 
+        y_true,
+        y_preds,
         classes=class_list,
         normalize=True,
-        title="Example Modulations Confusion Matrix\nTotal Accuracy: {:.2f}%".format(acc*100),
+        title="Example Modulations Confusion Matrix\nTotal Accuracy: {:.2f}%".format(
+            acc * 100
+        ),
         text=True,
         rotate_x_text=90,
-        figsize=(16,9),
+        figsize=(16, 9),
     )
-    #plt.show()
+    # plt.show()
     plt.savefig(Path(logs_dir, "confusion_matrix.png"))
-    
+
     print(f"\n\nI/Q TRAINING COMPLETE\n\n")
     print(f"Find results in {str(Path(logs_dir))}\n")
     print(f"Total Accuracy: {acc*100:.2f}%")
     print(f"Best Model Checkpoint: {checkpoint_callback.best_model_path}")
-    
+
 
 def visualize_dataset(dataset_path, num_iq_samples, logs_dir, class_list):
     print("\nVisualizing Dataset\n")
-    dataset = SigMFDataset( root=dataset_path, sample_count= num_iq_samples, allowed_filetypes=[".sigmf-data"], class_list=class_list)
-    dataset_class_counts = {class_name:0 for class_name in dataset.class_list}
-    for data,label in dataset:
+    dataset = SigMFDataset(
+        root=dataset_path,
+        sample_count=num_iq_samples,
+        allowed_filetypes=[".sigmf-data"],
+        class_list=class_list,
+    )
+    dataset_class_counts = {class_name: 0 for class_name in dataset.class_list}
+    for data, label in dataset:
         dataset_class_counts[dataset.class_list[label]] += 1
     print(f"{len(dataset)=}")
     print(dataset_class_counts)
-    
-    
+
     data_loader = DataLoader(
         dataset=dataset,
         batch_size=100,
         shuffle=True,
     )
-    
-    visualizer = IQVisualizer(
-        data_loader=data_loader
-    )
-    
+
+    visualizer = IQVisualizer(data_loader=data_loader)
+
     for figure in iter(visualizer):
         figure.set_size_inches(16, 16)
         plt.show()
         plt.savefig(Path(logs_dir, "dataset.png"))
         break
 
+
 def argument_parser():
     parser = ArgumentParser()
     parser.add_argument(
         "train_dataset_path",
         type=str,
-        nargs='+',
+        nargs="+",
         help="Path to training dataset",
     )
     parser.add_argument(
         "--val_dataset_path",
         type=str,
-        nargs='+',
+        nargs="+",
         help="Path to validation dataset",
     )
     parser.add_argument(
@@ -363,7 +386,7 @@ def argument_parser():
     )
     parser.add_argument(
         "--class_list",
-        nargs='+',
+        nargs="+",
         type=str,
         help="List of classes to use",
     )
@@ -380,19 +403,18 @@ def argument_parser():
 
     return parser
 
+
 if __name__ == "__main__":
 
     options = argument_parser().parse_args()
     train_iq(
-        train_dataset_path = options.train_dataset_path,
-        val_dataset_path = options.val_dataset_path,
-        num_iq_samples = options.num_iq_samples, 
-        only_use_start_of_burst = options.only_use_start_of_burst,
-        epochs = options.epochs, 
-        batch_size = options.batch_size, 
-        class_list = options.class_list, 
-        logs_dir = options.logs_dir, 
-        output_dir = options.output_dir,
+        train_dataset_path=options.train_dataset_path,
+        val_dataset_path=options.val_dataset_path,
+        num_iq_samples=options.num_iq_samples,
+        only_use_start_of_burst=options.only_use_start_of_burst,
+        epochs=options.epochs,
+        batch_size=options.batch_size,
+        class_list=options.class_list,
+        logs_dir=options.logs_dir,
+        output_dir=options.output_dir,
     )
-
-

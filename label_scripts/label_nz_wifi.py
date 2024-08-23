@@ -20,4 +20,6 @@ s3_data = {
 for label in s3_data:
     for data_glob in s3_data[label]:
         for f in tqdm(glob.glob(str(Path(data_glob)))):
-            annotation_utils.annotate(f, label=label, avg_window_len=256, avg_duration=3, debug=False)
+            annotation_utils.annotate(
+                f, label=label, avg_window_len=256, avg_duration=3, debug=False
+            )

@@ -1,4 +1,4 @@
-# RF data operations 
+# RF data operations
 
 import os
 import re
@@ -126,7 +126,7 @@ class Data:
             self.sigmf_meta_filename = self.filename
             self.metadata = json.load(open(self.sigmf_meta_filename))
 
-            self.data_filename = None 
+            self.data_filename = None
             sigmf_data_filename = (
                 f"{os.path.splitext(self.sigmf_meta_filename)[0]}.sigmf-data"
             )
@@ -135,7 +135,9 @@ class Data:
             elif os.path.isfile(self.metadata["global"].get("core:dataset", "")):
                 self.data_filename = self.metadata["global"]["core:dataset"]
                 if force_sigmf_data:
-                    self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
+                    self.export_sigmf_data(
+                        output_path=self.data_filename + ".sigmf-data"
+                    )
             # look for capture_details:source_file
             elif "captures" in self.metadata:
                 iq_source_files = []
@@ -147,10 +149,16 @@ class Data:
 
                 if iq_source_files:
                     self.data_filename = str(
-                        Path(os.path.dirname(self.sigmf_meta_filename), iq_source_files[0])
+                        Path(
+                            os.path.dirname(self.sigmf_meta_filename),
+                            iq_source_files[0],
+                        )
                     )
                     # The .zst extention needs to be removed when creating the .sigmf-data file
-                    self.export_sigmf_data(output_path=os.path.splitext(self.data_filename)[0]  + ".sigmf-data")
+                    self.export_sigmf_data(
+                        output_path=os.path.splitext(self.data_filename)[0]
+                        + ".sigmf-data"
+                    )
             if not self.data_filename or not os.path.isfile(self.data_filename):
                 raise ValueError(f"File: {self.data_filename} is not a valid file.")
         elif self.filename.lower().endswith(".sigmf-data"):
@@ -166,13 +174,13 @@ class Data:
             self.data_filename = self.filename
             possible_sigmf_meta_filenames = [
                 f"{os.path.splitext(self.data_filename)[0]}.sigmf-meta",
-                f"{self.data_filename}.sigmf-meta"
+                f"{self.data_filename}.sigmf-meta",
             ]
 
             for possible_sigmf in possible_sigmf_meta_filenames:
                 if os.path.isfile(possible_sigmf):
                     self.sigmf_meta_filename = possible_sigmf
-        
+
             if not os.path.isfile(self.sigmf_meta_filename):
                 self.zst_to_sigmf_meta()
 
@@ -348,7 +356,7 @@ class Data:
 
         if not output_path:
             output_path = os.path.splitext(input_file)[0] + ".sigmf-data"
-            
+
         if not os.path.exists(output_path) or overwrite:
             if self.data_filename.endswith(".zst"):
                 with open(input_file, "rb") as compressed:
@@ -557,7 +565,7 @@ class Data:
         else:
             if "annotation_labels" not in self.metadata:
                 self.metadata["annotation_labels"] = []
-    
+
             if annotation["core:label"] not in self.metadata["annotation_labels"]:
                 self.metadata["annotation_labels"].append(annotation["core:label"])
 
@@ -582,42 +590,34 @@ class Data:
         # (freq_space[963]-freq_space[60])/((max_freq-min_freq)/(1024-1))/1024
         # width = (annotation["core:freq_upper_edge"] - annotation["core:freq_lower_edge"]) / ((max_freq - min_freq)/(freq_dim-1))/freq_dim
 
-        freq_upper_edge = np.absolute(np.array(freq_space) - annotation["core:freq_upper_edge"]).argmin()
-        freq_lower_edge = np.absolute(np.array(freq_space) - annotation["core:freq_lower_edge"]).argmin()
+        freq_upper_edge = np.absolute(
+            np.array(freq_space) - annotation["core:freq_upper_edge"]
+        ).argmin()
+        freq_lower_edge = np.absolute(
+            np.array(freq_space) - annotation["core:freq_lower_edge"]
+        ).argmin()
 
-        sample_start = np.absolute(np.array(sample_space) - annotation["core:sample_start"]).argmin()
-        sample_end = np.absolute(np.array(sample_space) - (annotation["core:sample_start"] + annotation["core:sample_count"])).argmin()
-        
-        width = (
-            freq_upper_edge - freq_lower_edge
-        ) / freq_dim
+        sample_start = np.absolute(
+            np.array(sample_space) - annotation["core:sample_start"]
+        ).argmin()
+        sample_end = np.absolute(
+            np.array(sample_space)
+            - (annotation["core:sample_start"] + annotation["core:sample_count"])
+        ).argmin()
+
+        width = (freq_upper_edge - freq_lower_edge) / freq_dim
 
         # (((freq_space[963]+freq_space[60])/2)-min_freq) / ((max_freq-min_freq)/(1024-1))/1024
-        x_center = (
-            (
-                freq_upper_edge
-                + freq_lower_edge
-            )
-            / 2
-        ) / freq_dim
+        x_center = ((freq_upper_edge + freq_lower_edge) / 2) / freq_dim
 
         # (sample_space.index(2008064)-1 - sample_space.index(2008064+23552)) / 512
-        height = (
-            (sample_start - 1)
-            - sample_end
-        ) / time_dim
+        height = ((sample_start - 1) - sample_end) / time_dim
 
         # ((sample_space.index(2008064)-1 + sample_space.index(2008064+23552))/2) / 512
-        y_center = (
-            (
-                (sample_start - 1)
-                + sample_end
-            )
-            / 2
-        ) / time_dim
+        y_center = (((sample_start - 1) + sample_end) / 2) / time_dim
 
         yolo_label = f"{label_idx} {x_center} {y_center} {width} {height}"
-        
+
         return yolo_label
 
     def sigmf_to_labelme(self, annotation, spectrogram, spectrogram_filename):
@@ -671,8 +671,8 @@ class Data:
         freq_min = freq_space.index(annotation["core:freq_lower_edge"])
         freq_max = freq_space.index(annotation["core:freq_upper_edge"])
 
-        # TODO: fix annotation that is only partially in spectrogram 
-        # possible fix 
+        # TODO: fix annotation that is only partially in spectrogram
+        # possible fix
         # time_min = np.absolute(np.array(sample_space) - annotation["core:sample_start"]).argmin()
         # time_max = np.absolute(np.array(sample_space) - (annotation["core:sample_start"] + annotation["core:sample_count"])).argmin()
         time_min = sample_space.index(annotation["core:sample_start"]) - 1
@@ -693,7 +693,9 @@ class Data:
 
         return labelme_label
 
-    def find_matching_spectrograms(self, sample_start, sample_count, include_partial=True):
+    def find_matching_spectrograms(
+        self, sample_start, sample_count, include_partial=True
+    ):
         """
         Find spectrograms that contain the specified samples.
 
@@ -712,9 +714,15 @@ class Data:
                 <= (spectrogram["sample_start"] + spectrogram["sample_count"])
             ):
                 matching_spectrograms.append(spectrogram_filename)
-            elif include_partial and ((sample_start <= spectrogram["sample_start"]+spectrogram["sample_count"]) and ((sample_start + sample_count) >= spectrogram["sample_start"])):
+            elif include_partial and (
+                (
+                    sample_start
+                    <= spectrogram["sample_start"] + spectrogram["sample_count"]
+                )
+                and ((sample_start + sample_count) >= spectrogram["sample_start"])
+            ):
                 matching_spectrograms.append(spectrogram_filename)
-            
+
         return matching_spectrograms
 
     def import_labelme_spectrograms(self):
@@ -780,9 +788,9 @@ class Data:
                 try:
                     shutil.copy2(spectrogram_filename, new_spectrogram_filename)
                     # copy entry in metadata
-                    self.metadata["spectrograms"][
-                        new_spectrogram_filename
-                    ] = copy.deepcopy(spectrogram)
+                    self.metadata["spectrograms"][new_spectrogram_filename] = (
+                        copy.deepcopy(spectrogram)
+                    )
                     self.metadata["spectrograms"][new_spectrogram_filename]["labels"][
                         "labelme_file"
                     ] = str(labelme_filepath)
@@ -793,7 +801,13 @@ class Data:
         if new_image or new_metadata:
             self.write_sigmf_meta(self.metadata)
 
-    def export_yolo(self, label_outdir, image_outdir=None, yolo_class_list=None, force_yolo_label_larger=False):
+    def export_yolo(
+        self,
+        label_outdir,
+        image_outdir=None,
+        yolo_class_list=None,
+        force_yolo_label_larger=False,
+    ):
         """
         Create YOLO label .txt files and update metadata with YOLO label files and any new images.
         Starts by converting all SigMF annotations to YOLO format if not already available.
@@ -828,18 +842,18 @@ class Data:
                     if force_yolo_label_larger:
                         annotation_split = annotation.split(" ")
                         w = float(annotation_split[-2])
-                        h = float(annotation_split[-1]) 
-                        if w and h: 
+                        h = float(annotation_split[-1])
+                        if w and h:
                             if h * w < 0.1:
-                                mult_const = np.sqrt(0.1/(w*h))
+                                mult_const = np.sqrt(0.1 / (w * h))
                                 new_w = mult_const * w
                                 new_h = mult_const * h
                                 if new_w > 1:
                                     new_w = 1.0
                                     new_h = 0.1
-    
+
                                 annotation = f"{annotation_split[0]} {annotation_split[1]} {annotation_split[2]} {new_w} {new_h}"
-                        
+
                     f.write(f"{annotation}\n")
                 # print(f"Saving {yolo_filepath}\n")
                 if (
@@ -859,9 +873,9 @@ class Data:
                 try:
                     shutil.copy2(spectrogram_filename, new_spectrogram_filename)
                     # copy entry in metadata
-                    self.metadata["spectrograms"][
-                        new_spectrogram_filename
-                    ] = copy.deepcopy(spectrogram)
+                    self.metadata["spectrograms"][new_spectrogram_filename] = (
+                        copy.deepcopy(spectrogram)
+                    )
                     self.metadata["spectrograms"][new_spectrogram_filename]["labels"][
                         "yolo_file"
                     ] = str(yolo_filepath)
@@ -870,7 +884,9 @@ class Data:
                     pass
                 except FileNotFoundError:
                     print(f"FileNotFoundError: {spectrogram_filename}")
-                    print(f"Removing {spectrogram_filename} from {self.sigmf_meta_filename}")
+                    print(
+                        f"Removing {spectrogram_filename} from {self.sigmf_meta_filename}"
+                    )
                     self.metadata["spectrograms"].pop(spectrogram_filename)
 
         if new_image or new_metadata:
@@ -914,12 +930,16 @@ class Data:
         if "iq_snippets" not in self.metadata:
             self.metadata["iq_snippets"] = {}
 
-    def reset_yolo_labels(self,):
+    def reset_yolo_labels(
+        self,
+    ):
         for spectrogram_file in self.metadata["spectrograms"]:
-            if "labels" in self.metadata["spectrograms"][spectrogram_file] and "yolo" in self.metadata["spectrograms"][spectrogram_file]["labels"]:
+            if (
+                "labels" in self.metadata["spectrograms"][spectrogram_file]
+                and "yolo" in self.metadata["spectrograms"][spectrogram_file]["labels"]
+            ):
                 self.metadata["spectrograms"][spectrogram_file]["labels"]["yolo"] = []
 
-        
     def convert_all_sigmf_to_yolo(self, yolo_class_list=None, overwrite=True):
         """
         Convert all SigMF annotations to YOLO label format and update metadata.
@@ -933,7 +953,7 @@ class Data:
 
         if overwrite:
             self.reset_yolo_labels()
-            
+
         new_annotations = 0
         for annotation in self.metadata["annotations"]:
             sample_start = annotation["core:sample_start"]
@@ -957,8 +977,10 @@ class Data:
                 if "yolo" not in spectrogram["labels"]:
                     spectrogram["labels"]["yolo"] = []
 
-                yolo_label = self.sigmf_to_yolo(annotation, spectrogram, yolo_class_list=yolo_class_list)
-                
+                yolo_label = self.sigmf_to_yolo(
+                    annotation, spectrogram, yolo_class_list=yolo_class_list
+                )
+
                 if yolo_label not in spectrogram["labels"]["yolo"]:
                     spectrogram["labels"]["yolo"].append(yolo_label)
                     new_annotations += 1
