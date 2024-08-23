@@ -19,6 +19,7 @@ jobs:
           version: 1.8.3
       - name: Install poetry dependencies
         run: |
+          git submodule init && \
           git submodule update && \
           poetry config virtualenvs.create false && \
           poetry install  
