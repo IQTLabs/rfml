@@ -24,7 +24,7 @@ data_globs = {
 for label in data_globs:
     for data_glob in data_globs[label]:
         for f in tqdm(glob.glob(str(Path(data_glob)))):
-            # annotation_utils.annotate(f, label=label, avg_window_len=256, avg_duration=0.25, debug=True, estimate_frequency=True, spectral_energy_threshold=0.99, force_threshold_db=-40)
+            # annotation_utils.annotate(f, label=label, avg_window_len=256, avg_duration=0.25, debug=True, spectral_energy_threshold=0.99, force_threshold_db=-40)
 
             data_obj = data_class.Data(f)
             annotation_utils.reset_annotations(data_obj)
@@ -34,7 +34,6 @@ for label in data_globs:
                 avg_window_len=256,
                 avg_duration=0.10,
                 debug=False,
-                estimate_frequency=True,
                 spectral_energy_threshold=0.90,
                 # force_threshold_db=-48,
                 overwrite=True,

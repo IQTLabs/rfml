@@ -48,7 +48,7 @@ def annotate_power_squelch(
     avg_window_len,
     label=None,
     skip_validate=False,
-    estimate_frequency=False,
+    spectral_energy_threshold=False,
     dry_run=False,
     min_annotation_length=400,
     min_bandwidth=None,
@@ -59,6 +59,7 @@ def annotate_power_squelch(
     verbose=False,
     n_seek_samples=None,
     n_samples=None,
+    set_bandwidth=None,
 ):
     iq_samples = data_obj.get_samples(
         n_seek_samples=n_seek_samples, n_samples=n_samples
@@ -73,17 +74,23 @@ def annotate_power_squelch(
         if min_annotation_length and (stop - start < min_annotation_length):
             continue
 
-        if isinstance(estimate_frequency, bool):
-            if estimate_frequency:
-                estimate_frequency = 0.94
-            else:
-                estimate_frequency = None
-        if isinstance(estimate_frequency, float):
+        if isinstance(spectral_energy_threshold, bool) and spectral_energy_threshold:
+            spectral_energy_threshold = 0.94
+
+        if set_bandwidth:
+            freq_lower_edge = (
+                data_obj.metadata["captures"][0]["core:frequency"] - set_bandwidth / 2
+            )
+            freq_upper_edge = (
+                data_obj.metadata["captures"][0]["core:frequency"] + set_bandwidth / 2
+            )
+
+        elif isinstance(spectral_energy_threshold, float):
             freq_lower_edge, freq_upper_edge = get_occupied_bandwidth(
                 iq_samples[start:stop],
                 data_obj.metadata["global"]["core:sample_rate"],
                 data_obj.metadata["captures"][0]["core:frequency"],
-                spectral_energy_threshold=estimate_frequency,
+                spectral_energy_threshold=spectral_energy_threshold,
                 dc_block=dc_block,
                 verbose=verbose,
             )
@@ -141,7 +148,7 @@ def annotate(
     debug=False,
     dry_run=False,
     min_annotation_length=400,
-    estimate_frequency=True,
+    spectral_energy_threshold=True,
     force_threshold_db=None,
     overwrite=True,
     min_bandwidth=None,
@@ -150,6 +157,7 @@ def annotate(
     dc_block=None,
     verbose=False,
     time_start_stop=None,
+    set_bandwidth=None,
 ):
 
     data_obj = data_class.Data(filename)
@@ -249,7 +257,7 @@ def annotate(
         avg_window_len,
         label=label,
         skip_validate=True,
-        estimate_frequency=estimate_frequency,
+        spectral_energy_threshold=spectral_energy_threshold,
         min_bandwidth=min_bandwidth,
         max_bandwidth=max_bandwidth,
         dry_run=dry_run,
@@ -260,6 +268,7 @@ def annotate(
         verbose=verbose,
         n_seek_samples=n_seek_samples,
         n_samples=n_samples,
+        set_bandwidth=set_bandwidth,
     )
 
 
