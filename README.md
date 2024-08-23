@@ -100,7 +100,7 @@ annotation_utils.annotate(
                 avg_window_len=256,                 # The number of samples over which to average signal power
                 avg_duration=0.25,                  # The number of seconds, from the start of the recording to use to automatically calculate the SNR threshold, if it is None then all of the samples will be used
                 debug=False,    
-                estimate_frequency=True,            # Whether the frequency bounds for an annotation should be calculated. estimate_frequency needs to be enabled if you use min/max_bandwidth
+                set_bandwidth=10000000,            # Manually set the bandwidth of the signals in Hz, if this parameter is set, then spectral_energy_threshold is ignored
                 spectral_energy_threshold=0.95,     # Percentage used to determine the upper and lower frequency bounds for an annotation
                 force_threshold_db=-58,             # Used to manually set the threshold used for detecting a signal and creating an annotation. If None, then the automatic threshold calculation will be used instead.
                 overwrite=False,                    # If True, any existing annotations in the .sigmf-meta file will be removed
@@ -138,7 +138,7 @@ After you have finished labeling your data, the next step is to train a model on
 
 ### Configure
 
-This repo provides an automated script for training and evaluating models. To do this, configure the [run_experiments.py](./run_experiments.py) file to point to the data you want to use and set the training parameters:
+This repo provides an automated script for training and evaluating models. To do this, configure the [run_experiments.py](rfml/run_experiments.py) file to point to the data you want to use and set the training parameters:
 
 ```python
     "experiment_0": { # A name to refer to the experiment
@@ -186,29 +186,29 @@ This will generate a **.mar** file in the [models/](./models/) folder. [GamutRF]
 ## Files
 
 
-[annotation_utils.py](annotation_utils.py) - DSP based automated labelling tools
+[annotation_utils.py](rfml/annotation_utils.py) - DSP based automated labelling tools
 
-[auto_label.py](auto_label.py) - CV based automated labelling tools
+[auto_label.py](rfml/auto_label.py) - CV based automated labelling tools
 
-[data.py](data.py) - RF data operations tool
+[data.py](rfml/data.py) - RF data operations tool
 
-[experiment.py](experiment.py) - Class to manage experiments 
+[experiment.py](rfml/experiment.py) - Class to manage experiments 
 
-[models.py](models.py) - Class for I/Q models (based on TorchSig) 
+[models.py](rfml/models.py) - Class for I/Q models (based on TorchSig) 
 
-[run_experiments.py](run_experiments.py) - Experiment configurations and run script
+[run_experiments.py](rfml/run_experiments.py) - Experiment configurations and run script
 
-[sigmf_pytorch_dataset.py](sigmf_pytorch_dataset.py) - PyTorch style dataset class for SigMF data (based on TorchSig) 
+[sigmf_pytorch_dataset.py](rfml/sigmf_pytorch_dataset.py) - PyTorch style dataset class for SigMF data (based on TorchSig) 
 
-[spectrogram.py](spectrogram.py) - Spectrogram tools 
+[spectrogram.py](rfml/spectrogram.py) - Spectrogram tools 
 
-[test_data.py](test_data.py) - Test for data.py (might be outdated)
+[test_data.py](rfml/test_data.py) - Test for data.py (might be outdated)
 
-[train_iq.py](train_iq.py) - Training script for I/Q models
+[train_iq.py](rfml/train_iq.py) - Training script for I/Q models
 
-[train_spec.py](train_spec.py) - Training script for spectrogram models
+[train_spec.py](rfml/train_spec.py) - Training script for spectrogram models
 
-[zst_parse.py](zst_parse.py) - ZST file parsing tool, for GamutRF-style filenames  
+[zst_parse.py](rfml/zst_parse.py) - ZST file parsing tool, for GamutRF-style filenames  
 
 The [notebooks/](./notebooks/) directory contains various experiments we have conducted during development.
 

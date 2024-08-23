@@ -73,7 +73,7 @@ for label in s3_data:
                     "filename": f,
                     "label": label[0],
                     "avg_duration": 3,
-                    "estimate_frequency": label[1],
+                    "set_bandwidth": label[1],
                     "time_start_stop": 5,
                 }
             )
@@ -89,11 +89,7 @@ memory_limit = int(available_memory * 0.8)
 resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
 
 pool = Pool(16)
-# common_args = {
-#     'avg_duration':3,
-#     'estimate_frequency':
-#     'time_start_stop': 5,
-# }
+
 # pool.starmap(partial(annotation_utils.annotate, **common_args), job_args)
 
 
