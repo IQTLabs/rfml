@@ -2,7 +2,7 @@ name: CI Test
 on: [push, pull_request]
 jobs:
   ci-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,8 +19,8 @@ jobs:
           version: 1.8.3
       - name: Install poetry and dependencies
         run: |
-          apt-get -yq update && apt-get -yq libcurand\* libcublas\* && \
           git submodule init && \
           git submodule update && \
           poetry config virtualenvs.create false && \
-          poetry install  
+          poetry install && \
+          pip install pytorch=2.0.1
