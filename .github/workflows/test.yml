@@ -25,4 +25,5 @@ jobs:
           poetry config virtualenvs.create false && \
           poetry install && \
           for i in torch ; do poetry run pip install --no-cache-dir "$i"=="$(grep $i pyproject.toml | grep -Eo '\"[0-9\.]+' | sed 's/\"//g')" || exit 1 ; done
-          python3 -c "import torch"
+          python3 -c "import torch" && \
+          poetry run black --check
