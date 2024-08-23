@@ -11,16 +11,18 @@ from tqdm import tqdm
 
 import rfml.annotation_utils as annotation_utils
 
+
 def worker_wrapper(fn, kwargs):
     def try_fn():
         try:
             return fn(**kwargs)
-        except Exception as e: 
+        except Exception as e:
             print(e)
             print(kwargs)
 
     return try_fn()
-    #return fn(**kwargs)
+    # return fn(**kwargs)
+
 
 s3_data = {
     ("anom_wifi", 5000000): [
@@ -66,13 +68,15 @@ for label in s3_data:
     for data_glob in s3_data[label]:
         for f in tqdm(glob.glob(str(Path(data_glob)))):
             # job_args.append([f, label])
-            job_args.append({
-                'filename': f, 
-                'label': label[0],
-                'avg_duration':3, 
-                'estimate_frequency': label[1],
-                'time_start_stop': 5,
-            })
+            job_args.append(
+                {
+                    "filename": f,
+                    "label": label[0],
+                    "avg_duration": 3,
+                    "estimate_frequency": label[1],
+                    "time_start_stop": 5,
+                }
+            )
 
 # annotation_utils.annotate(f, label=label, avg_window_len=256, avg_duration=3, debug=False)
 
@@ -86,8 +90,8 @@ resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
 
 pool = Pool(16)
 # common_args = {
-#     'avg_duration':3, 
-#     'estimate_frequency':  
+#     'avg_duration':3,
+#     'estimate_frequency':
 #     'time_start_stop': 5,
 # }
 # pool.starmap(partial(annotation_utils.annotate, **common_args), job_args)

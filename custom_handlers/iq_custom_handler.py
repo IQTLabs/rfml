@@ -67,10 +67,10 @@ class TorchsigHandler(BaseHandler):
         self.max_db = None
 
     def add_to_avg(self, value):
-        self.avg_db_historical = (self.avg_db_historical * self.avg_size + value) / (self.avg_size + 1)
+        self.avg_db_historical = (self.avg_db_historical * self.avg_size + value) / (
+            self.avg_size + 1
+        )
         self.avg_size += 1
-
-
 
     def _load_torchscript_model(self, model_pt_path):
         """Loads the PyTorch model and returns the NN model object.
@@ -90,7 +90,7 @@ class TorchsigHandler(BaseHandler):
         # model_checkpoint = torch.load(model_pt_path)
         # num_classes = len(model_checkpoint["classifier.bias"])
         # model = efficientnet_b4(
-        #			num_classes=num_classes
+        # 			num_classes=num_classes
         # )
         # model.load_state_dict(model_checkpoint)
 
@@ -126,15 +126,15 @@ class TorchsigHandler(BaseHandler):
                 output, _ = self._infer_with_profiler(data=data)
             else:
                 raise RuntimeError(
-                        "Profiler is enabled but current version of torch does not support."
-                        "Install torch>=1.8.1 to use profiler."
+                    "Profiler is enabled but current version of torch does not support."
+                    "Install torch>=1.8.1 to use profiler."
                 )
         else:
             if self._is_describe():
                 output = [self.describe_handle()]
             elif self.gate(data):
                 print(f"\n NO SIGNAL \n")
-                output = [{"No signal":None}]
+                output = [{"No signal": None}]
             else:
                 data_preprocess = self.preprocess(data)
 
@@ -164,13 +164,12 @@ class TorchsigHandler(BaseHandler):
 
         data = torch.tensor(np.frombuffer(body, dtype=np.complex64), dtype=torch.cfloat)
 
-        avg_pwr = 10*torch.log10(torch.mean(torch.abs(data)**2))
+        avg_pwr = 10 * torch.log10(torch.mean(torch.abs(data) ** 2))
         if self.max_db is None or self.max_db < avg_pwr:
             self.max_db = avg_pwr
-        
+
         self.add_to_avg(avg_pwr)
 
-        
         print("\n=====================================\n")
         print("\n=====================================\n")
         print(f"\n{data=}\n")
@@ -179,14 +178,10 @@ class TorchsigHandler(BaseHandler):
         print("\n=====================================\n")
         print("\n=====================================\n")
 
-        if avg_pwr > ( self.max_db + self.avg_db_historical)/2:
+        if avg_pwr > (self.max_db + self.avg_db_historical) / 2:
             return False
 
         return True
-
-            
-
-            
 
     def preprocess(self, data):
         """
@@ -200,16 +195,15 @@ class TorchsigHandler(BaseHandler):
             print("could not parse body from request: ", data)
             raise ValueError from exc
 
-
         data = torch.tensor(np.frombuffer(body, dtype=np.complex64), dtype=torch.cfloat)
         print("\n=====================================\n")
         print(f"\n{data=}\n")
         print(f"\n{torch.min(torch.abs(data)**2)=}, {torch.max(torch.abs(data)**2)=}\n")
-        avg_pwr = torch.mean(torch.abs(data)**2)
+        avg_pwr = torch.mean(torch.abs(data) ** 2)
         avg_pwr_db = 10 * torch.log10(avg_pwr)
         print(f"\n{avg_pwr=}\n")
         print(f"\n{avg_pwr_db=}\n")
-        data = data * 1/torch.norm(data, float("inf"), keepdim=True)
+        data = data * 1 / torch.norm(data, float("inf"), keepdim=True)
         data = torch.view_as_real(data)
         data = torch.movedim(data, -1, 0).unsqueeze(0)
         # data should be of size (N, 2, n_samples)
@@ -237,7 +231,9 @@ class TorchsigHandler(BaseHandler):
         confidences, class_indexes = torch.max(inference_output.data, 1)
         results = {
             str(class_index): [{"confidence": confidence}]
-            for class_index, confidence in zip(class_indexes.tolist(), confidences.tolist())
+            for class_index, confidence in zip(
+                class_indexes.tolist(), confidences.tolist()
+            )
         }
         print(f"\n{inference_output=}\n{results=}\n")
         return [results]

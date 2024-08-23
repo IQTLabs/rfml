@@ -1,4 +1,4 @@
-# PyTorch Lightning class used for I/Q models 
+# PyTorch Lightning class used for I/Q models
 
 import torch
 import torchmetrics
@@ -11,9 +11,16 @@ from pytorch_lightning import LightningModule
 from torch import optim
 
 
-
 class ExampleNetwork(LightningModule):
-    def __init__(self, model, data_loader=None, val_data_loader=None, num_classes=None, extra_metrics=True, logs_dir=None):
+    def __init__(
+        self,
+        model,
+        data_loader=None,
+        val_data_loader=None,
+        num_classes=None,
+        extra_metrics=True,
+        logs_dir=None,
+    ):
         super(ExampleNetwork, self).__init__()
         self.mdl = model
         self.data_loader = data_loader
@@ -30,12 +37,18 @@ class ExampleNetwork(LightningModule):
             self.extra_metrics = False
 
         self.logs_dir = logs_dir
-            
+
         # Metrics
         if self.extra_metrics:
-            self.train_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
-            self.valid_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=num_classes)
-            self.confusion_mat = torchmetrics.classification.ConfusionMatrix(task="multiclass", normalize='true', num_classes=num_classes)
+            self.train_acc = torchmetrics.classification.Accuracy(
+                task="multiclass", num_classes=num_classes
+            )
+            self.valid_acc = torchmetrics.classification.Accuracy(
+                task="multiclass", num_classes=num_classes
+            )
+            self.confusion_mat = torchmetrics.classification.ConfusionMatrix(
+                task="multiclass", normalize="true", num_classes=num_classes
+            )
 
     def forward(self, x):
         return self.mdl(x)
@@ -60,8 +73,8 @@ class ExampleNetwork(LightningModule):
 
         if self.extra_metrics:
             self.train_acc(preds, y)
-            self.log('train_acc', self.train_acc, on_step=True, on_epoch=False)
-        
+            self.log("train_acc", self.train_acc, on_step=True, on_epoch=False)
+
         loss = F.cross_entropy(preds, y)
         self.log("train_loss", loss, prog_bar=True)
         return {"loss": loss}
@@ -73,15 +86,14 @@ class ExampleNetwork(LightningModule):
         x, y = batch
         y = torch.squeeze(y.to(torch.int64))
         preds = self(x.float())
-        
+
         val_loss = F.cross_entropy(preds, y)
 
         if self.extra_metrics:
             self.valid_acc(preds, y)
             self.confusion_mat.update(preds, y)
-            self.log('valid_acc', self.valid_acc, on_step=True, on_epoch=True)
-         
-        
+            self.log("valid_acc", self.valid_acc, on_step=True, on_epoch=True)
+
         self.log("val_loss", val_loss, prog_bar=True)
         return {"val_loss": val_loss}
 
@@ -89,10 +101,13 @@ class ExampleNetwork(LightningModule):
         if self.extra_metrics:
             self.confusion_mat.compute()
             fig, ax = self.confusion_mat.plot()
-            fig.savefig(Path(self.logs_dir, f"confusion_matrix_{self.current_epoch}.png"))  # save the figure to file
-            plt.close(fig) 
+            fig.savefig(
+                Path(self.logs_dir, f"confusion_matrix_{self.current_epoch}.png")
+            )  # save the figure to file
+            plt.close(fig)
             self.confusion_mat.reset()
-            
+
+
 # class CustomNetwork(LightningModule):
 #     def __init__(self, model, data_loader=None, val_data_loader=None):
 #         super(CustomNetwork, self).__init__()
@@ -134,4 +149,3 @@ class ExampleNetwork(LightningModule):
 #         val_loss = F.cross_entropy(self(x.float()), y)
 #         self.log("val_loss", val_loss, prog_bar=True)
 #         return {"val_loss": val_loss}
-
