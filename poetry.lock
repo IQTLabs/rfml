@@ -4427,13 +4427,13 @@ files = [
 
 [[package]]
 name = "ultralytics"
-version = "8.2.82"
+version = "8.2.83"
 description = "Ultralytics YOLOv8 for SOTA object detection, multi-object tracking, instance segmentation, pose estimation and image classification."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "ultralytics-8.2.82-py3-none-any.whl", hash = "sha256:edd7caa95e028752ec211baf4d6d2694db082143ec4aa6ec9779b096c74cd6f9"},
-    {file = "ultralytics-8.2.82.tar.gz", hash = "sha256:b5bd126f44b2f6232b625f24b8aa01259b527d7268fcb81f84e1c897238579b6"},
+    {file = "ultralytics-8.2.83-py3-none-any.whl", hash = "sha256:f4d650c1b44f2ebb857b3aa7182346123b6490f94ebfe9ad521773e989c9de0c"},
+    {file = "ultralytics-8.2.83.tar.gz", hash = "sha256:1d1352edb09487d6913667c061be9a8623da34bc402d5a21d97ba0844bda2e43"},
 ]
 
 [package.dependencies]
