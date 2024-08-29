@@ -57,8 +57,8 @@ See [Poetry docs](https://python-poetry.org/docs/basic-usage/#activating-the-vir
 ## Install
 
 ```bash
-git clone https://github.com/IQTLabs/rfml-dev.git
-cd rfml-dev
+git clone https://github.com/IQTLabs/rfml.git
+cd rfml
 git submodule update --init --recursive
 poetry install
 ```
