@@ -12,10 +12,11 @@ class Experiment:
         train_dir,
         val_dir=None,
         test_dir=None,
-        iq_num_samples=1024,
+        iq_num_samples=800,#1024,
         iq_only_start_of_burst=True,
         iq_epochs=40,
-        iq_batch_size=180,
+        iq_batch_size=128,
+        iq_learning_rate=0.0001,
         spec_n_fft=1024,
         spec_time_dim=512,
         spec_epochs=40,
@@ -34,6 +35,7 @@ class Experiment:
         self.iq_only_start_of_burst = iq_only_start_of_burst
         self.iq_epochs = iq_epochs
         self.iq_batch_size = iq_batch_size
+        self.iq_learning_rate = iq_learning_rate
         self.spec_n_fft = spec_n_fft
         self.spec_time_dim = spec_time_dim
         self.spec_n_samples = spec_n_fft * spec_time_dim

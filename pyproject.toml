@@ -11,7 +11,7 @@ scikit-image = "^0.24.0"
 matplotlib = "^3.8.3"
 numpy = "^1.26.4"
 opencv-python = "^4.8.0.74"
-scipy = "1.14.1"
+scipy = "1.13"
 zstandard = "^0.23.0"
 pyyaml = "^6.0.1"
 pillow = "^10.2.0"
@@ -29,6 +29,7 @@ ultralytics = "^8.2.79"
 jupyter = "^1.0.0"
 ipykernel = "^6.29.3"
 black = "24.8.0"
+tensorboard = "^2.17.1"
 
 [build-system]
 requires = ["poetry-core"]

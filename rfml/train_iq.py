@@ -10,6 +10,8 @@ from torchsig.utils.visualize import (
 from torchsig.utils.dataset import SignalDataset
 from torchsig.datasets.sig53 import Sig53
 from torch.utils.data import DataLoader
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from typing import List
 from tqdm import tqdm
@@ -17,14 +19,16 @@ from datetime import datetime
 import numpy as np
 import os
 from pathlib import Path
-import torchmetrics
 
-from torchsig.models.iq_models.efficientnet.efficientnet import efficientnet_b4
+from torchsig.models.iq_models.efficientnet.efficientnet import efficientnet_b0, efficientnet_b4
 
 # from lightning.pytorch.callbacks import DeviceStatsMonitor
 from torchsig.utils.cm_plotter import plot_confusion_matrix
 from pytorch_lightning.callbacks import ModelCheckpoint, DeviceStatsMonitor
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer
+from scipy import signal as sp
 
 from sklearn.metrics import classification_report
 from torchsig.datasets.sig53 import Sig53
@@ -81,6 +85,8 @@ def train_iq(
     class_list=None,
     logs_dir=None,
     output_dir=None,
+    learning_rate=None,
+    experiment_name=None,
 ):
     print(f"\n\nSTARTING I/Q TRAINING\n\n")
     if logs_dir is None:
@@ -91,10 +97,7 @@ def train_iq(
     logs_dir = Path(output_dir, logs_dir)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    visualize_dataset(
-        train_dataset_path, num_iq_samples, logs_dir, class_list=class_list
-    )
-
+    
     # # SigMF based Model Training
 
     eb_no = False
@@ -128,50 +131,83 @@ def train_iq(
     # ### Load the SigMF File dataset
     # and generate the class list
 
-    # transform = ST.Compose([
-    #     # ST.RandomPhaseShift(phase_offset=(-1, 1)),
-    #     ST.Normalize(norm=np.inf),
-    #     ST.ComplexTo2D(),
-    # ])
+    # changes, 
+    # 1) augmentations
+    # 2) pretrained weights
+    # 3) optimizers
+    # 4) learning rate
+    # 5) batch size
+    
+    basic_transform = ST.Compose([
+        # ST.RandomPhaseShift(phase_offset=(-1, 1)),
+        # ST.AddNoise(),
+        # ST.AutomaticGainControl(),
+        ST.Normalize(norm=2),
+        # ST.Normalize(norm=np.inf),
+        ST.ComplexTo2D(),
+    ])
 
     val_transform = ST.Compose(
         [
-            ST.Normalize(norm=np.inf),
+            # ST.AutomaticGainControl(),
+            ST.Normalize(norm=2),
+            # ST.Normalize(norm=np.inf),
             ST.ComplexTo2D(),
         ]
     )
-    train_transform = level2
 
+    visualize_transform = ST.Compose(
+        [
+            # ST.AddNoise(),
+            ST.AutomaticGainControl()
+        ]
+    )
+    # train_transform = level2
+    train_transform = basic_transform
+
+
+    visualize_dataset(
+        train_dataset_path, num_iq_samples, logs_dir, class_list=class_list, transform=visualize_transform
+    )
+
+    train_limit = 0.5
+
+    
     ###
     if val_dataset_path:
-        train_dataset = SigMFDataset(
+        original_train_dataset = SigMFDataset(
             root=train_dataset_path,
             sample_count=num_iq_samples,
             transform=train_transform,
             only_first_samples=only_use_start_of_burst,
             class_list=class_list,
         )
-        val_dataset = SigMFDataset(
+        original_val_dataset = SigMFDataset(
             root=val_dataset_path,
             sample_count=num_iq_samples,
             transform=val_transform,
             only_first_samples=only_use_start_of_burst,
             class_list=class_list,
         )
-        sampler = train_dataset.get_weighted_sampler()
 
-        train_class_counts = train_dataset.get_class_counts()
+        train_dataset, _ = torch.utils.data.random_split(original_train_dataset, [train_limit, 1-train_limit])
+        val_dataset, _ = torch.utils.data.random_split(original_val_dataset, [train_limit, 1-train_limit])
+        
+        sampler = original_train_dataset.get_weighted_sampler(indices=train_dataset.indices)
+
+        train_class_counts = original_train_dataset.get_class_counts(indices=train_dataset.indices)
         train_class_counts = {
-            train_dataset.class_list[k]: v for k, v in train_class_counts.items()
+            original_train_dataset.class_list[k]: v for k, v in train_class_counts.items()
         }
-        val_class_counts = val_dataset.get_class_counts()
+        val_class_counts = original_val_dataset.get_class_counts(indices=val_dataset.indices)
         val_class_counts = {
-            val_dataset.class_list[k]: v for k, v in val_class_counts.items()
+            original_val_dataset.class_list[k]: v for k, v in val_class_counts.items()
         }
 
-        class_list = class_list if class_list else train_dataset.class_list
+        class_list = class_list if class_list else original_train_dataset.class_list
     ###
     else:
+        print("\n\n\ntrain_limit\n\n\n")
         dataset = SigMFDataset(
             root=train_dataset_path,
             sample_count=num_iq_samples,
@@ -179,8 +215,8 @@ def train_iq(
             only_first_samples=only_use_start_of_burst,
             class_list=class_list,
         )
-
-        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.8, 0.2])
+        train_dataset, val_dataset, _ = torch.utils.data.random_split(dataset, [train_limit*0.8, train_limit*0.2, 1-train_limit])
+        # train_dataset, val_dataset = torch.utils.data.random_split(dataset, [0.8, 0.2])
         sampler = dataset.get_weighted_sampler(indices=train_dataset.indices)
 
         train_class_counts = dataset.get_class_counts(indices=train_dataset.indices)
@@ -194,13 +230,13 @@ def train_iq(
 
         class_list = class_list if class_list else dataset.class_list
 
-    print(f"{len(train_dataset)=}, {train_class_counts=}")
-    print(f"{len(val_dataset)=}, {val_class_counts=}")
+    print(f"\n{len(train_dataset)=}, {train_class_counts=}")
+    print(f"{len(val_dataset)=}, {val_class_counts=}\n")
 
     train_dataloader = DataLoader(
         dataset=train_dataset,
         batch_size=batch_size,
-        num_workers=16,
+        num_workers=24,
         sampler=sampler,
         # shuffle=True,
         drop_last=True,
@@ -208,16 +244,25 @@ def train_iq(
     val_dataloader = DataLoader(
         dataset=val_dataset,
         batch_size=batch_size,
-        num_workers=16,
+        num_workers=24,
         shuffle=False,
         drop_last=True,
     )
 
-    model = efficientnet_b4(
-        pretrained=True,
-        path="efficientnet_b4.pt",
+    model = efficientnet_b0(
+        pretrained=False,#True,
+        path="efficientnet_b0.pt",
         num_classes=len(class_list),
+        drop_path_rate=0.2,
+        drop_rate=0.2,
     )
+    # model = efficientnet_b4(
+    #     pretrained=True,
+    #     path="efficientnet_b4.pt",
+    #     num_classes=len(class_list),
+    #     drop_path_rate=0.2,
+    #     drop_rate=0.6,
+    # )
     # model.classifier = torch.nn.Linear(in_features=model.classifier.in_features, out_features=len(class_list), bias=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -229,6 +274,7 @@ def train_iq(
         val_dataloader,
         num_classes=len(class_list),
         logs_dir=logs_dir,
+        learning_rate=learning_rate,
     )
 
     # Setup checkpoint callbacks
@@ -240,13 +286,15 @@ def train_iq(
         mode="min",
     )
     # Create and fit trainer
-
+    experiment_name = experiment_name if experiment_name else 1
+    logger = TensorBoardLogger(save_dir=os.getcwd(), version=experiment_name, name="lightning_logs")
     trainer = Trainer(
         max_epochs=epochs,
-        callbacks=[DeviceStatsMonitor(), checkpoint_callback],
+        callbacks=[EarlyStopping(monitor="val_loss", mode="min", patience=10, verbose=True), checkpoint_callback],
         accelerator="gpu",
         devices=1,
-        profiler="simple",
+        logger=logger,
+        # profiler="simple",
     )
     trainer.fit(example_model)
 
@@ -317,13 +365,14 @@ def train_iq(
     print(f"Best Model Checkpoint: {checkpoint_callback.best_model_path}")
 
 
-def visualize_dataset(dataset_path, num_iq_samples, logs_dir, class_list):
+def visualize_dataset(dataset_path, num_iq_samples, logs_dir, class_list, transform=None):
     print("\nVisualizing Dataset\n")
     dataset = SigMFDataset(
         root=dataset_path,
         sample_count=num_iq_samples,
         allowed_filetypes=[".sigmf-data"],
         class_list=class_list,
+        transform=transform,
     )
     dataset_class_counts = {class_name: 0 for class_name in dataset.class_list}
     for data, label in dataset:
@@ -333,7 +382,7 @@ def visualize_dataset(dataset_path, num_iq_samples, logs_dir, class_list):
 
     data_loader = DataLoader(
         dataset=dataset,
-        batch_size=100,
+        batch_size=36,
         shuffle=True,
     )
 
@@ -342,9 +391,15 @@ def visualize_dataset(dataset_path, num_iq_samples, logs_dir, class_list):
     for figure in iter(visualizer):
         figure.set_size_inches(16, 16)
         plt.show()
-        plt.savefig(Path(logs_dir, "dataset.png"))
+        plt.savefig(Path(logs_dir, "iq_dataset.png"))
         break
 
+    spec_visualizer = SpectrogramVisualizer(data_loader=data_loader, sample_rate=20e6, window=sp.windows.blackmanharris(32), nperseg=32, nfft=32 )
+    for figure in iter(spec_visualizer):
+        figure.set_size_inches(16, 16)
+        plt.show()
+        plt.savefig(Path(logs_dir, "spec_dataset.png"))
+        break
 
 def argument_parser():
     parser = ArgumentParser()

@@ -20,6 +20,7 @@ class ExampleNetwork(LightningModule):
         num_classes=None,
         extra_metrics=True,
         logs_dir=None,
+        learning_rate=None,
     ):
         super(ExampleNetwork, self).__init__()
         self.mdl = model
@@ -27,7 +28,7 @@ class ExampleNetwork(LightningModule):
         self.val_data_loader = val_data_loader
 
         # Hyperparameters
-        self.lr = 0.001
+        self.lr = learning_rate if learning_rate else 0.001
         self.batch_size = data_loader.batch_size
 
         self.num_classes = num_classes
@@ -59,7 +60,8 @@ class ExampleNetwork(LightningModule):
         return out
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=self.lr)
+        # return optim.Adam(self.parameters(), lr=self.lr)
+        return optim.AdamW(self.parameters(), lr=self.lr)
 
     def train_dataloader(self):
         return self.data_loader
