@@ -5,10 +5,11 @@ import random
 import sys
 import tempfile
 from argparse import ArgumentParser
-from subprocess import Popen, PIPE, STDOUT
+from subprocess import Popen, PIPE
 from gnuradio import analog
 from gnuradio import blocks
 from gnuradio import filter as grfilter
+from gnuradio.fft import window
 from gnuradio import gr
 from scipy.io import wavfile
 
@@ -77,6 +78,83 @@ class fmsiggen(gr.top_block):
         )
 
 
+class amsiggen(gr.top_block):
+
+    def __init__(
+        self,
+        wav_file,
+        sample_file,
+        samp_rate,
+        audio_samp_rate,
+        audio_gain,
+        audio_interp=4,
+    ):
+        gr.top_block.__init__(self, "amsiggen", catch_exceptions=True)
+
+        ##################################################
+        # Variables
+        ##################################################
+        self.samp_rate = samp_rate
+        self.audio_samp_rate = audio_samp_rate
+        self.audio_interp = audio_interp
+        self.audio_gain = audio_gain
+
+        ##################################################
+        # Blocks
+        ##################################################
+
+        self.rational_resampler_xxx_2 = grfilter.rational_resampler_ccc(
+            interpolation=samp_rate,
+            decimation=audio_samp_rate,
+            taps=[],
+            fractional_bw=0,
+        )
+        self.low_pass_filter_1 = grfilter.interp_fir_filter_ccf(
+            1,
+            grfilter.firdes.low_pass(
+                0.5, audio_samp_rate, 5000, 400, window.WIN_HAMMING, 6.76
+            ),
+        )
+        self.blocks_wavfile_source_0 = blocks.wavfile_source(wav_file, False)
+        self.blocks_multiply_xx_2 = blocks.multiply_vcc(1)
+        self.blocks_float_to_complex_0 = blocks.float_to_complex(1)
+        self.blocks_add_const_vxx_0 = blocks.add_const_cc(0.5)
+        self.analog_sig_source_x_2 = analog.sig_source_c(
+            audio_samp_rate, analog.GR_COS_WAVE, 0, 1, 0, 0
+        )
+        self.analog_const_source_x_0 = analog.sig_source_f(
+            0, analog.GR_CONST_WAVE, 0, 0, 0
+        )
+        self.blocks_sigmf_sink_minimal_0 = blocks.sigmf_sink_minimal(
+            item_size=gr.sizeof_gr_complex,
+            filename=sample_file,
+            sample_rate=samp_rate,
+            center_freq=100e6,
+            author="",
+            description="",
+            hw_info="",
+            is_complex=True,
+        )
+
+        ##################################################
+        # Connections
+        ##################################################
+        self.connect(
+            (self.analog_const_source_x_0, 0), (self.blocks_float_to_complex_0, 1)
+        )
+        self.connect((self.analog_sig_source_x_2, 0), (self.blocks_multiply_xx_2, 1))
+        self.connect((self.blocks_add_const_vxx_0, 0), (self.blocks_multiply_xx_2, 0))
+        self.connect((self.blocks_float_to_complex_0, 0), (self.low_pass_filter_1, 0))
+        self.connect((self.blocks_multiply_xx_2, 0), (self.rational_resampler_xxx_2, 0))
+        self.connect(
+            (self.blocks_wavfile_source_0, 0), (self.blocks_float_to_complex_0, 0)
+        )
+        self.connect((self.low_pass_filter_1, 0), (self.blocks_add_const_vxx_0, 0))
+        self.connect(
+            (self.rational_resampler_xxx_2, 0), (self.blocks_sigmf_sink_minimal_0, 0)
+        )
+
+
 def run_siggen(
     siggen_cls, int_count, sample_file, samp_rate, audio_samp_rate, audio_gain
 ):
@@ -99,6 +177,7 @@ def run_siggen(
         out_samp_rate, audio_data = wavfile.read(wav_file)
         audio_secs = audio_data.shape[0] / out_samp_rate
         print(f"{audio_secs} seconds of audio")
+        print(f"using {siggen_cls}")
         tb = siggen_cls(wav_file, sample_file, samp_rate, audio_samp_rate, audio_gain)
         tb.start()
         tb.wait()
@@ -106,6 +185,13 @@ def run_siggen(
 
 def argument_parser():
     parser = ArgumentParser()
+    parser.add_argument(
+        "--siggen",
+        dest="siggen",
+        type=str,
+        default="fmsiggen",
+        help="signal generator class to use",
+    )
     parser.add_argument(
         "--sample_file",
         dest="sample_file",
@@ -147,7 +233,7 @@ def argument_parser():
 def main():
     options = argument_parser().parse_args()
     run_siggen(
-        fmsiggen,
+        getattr(sys.modules[__name__], options.siggen),
         options.int_count,
         options.sample_file,
         options.samp_rate,
