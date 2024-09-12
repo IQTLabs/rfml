@@ -2,13 +2,13 @@ from pathlib import Path
 
 
 import torch
-torch.set_float32_matmul_precision('high')
+
+torch.set_float32_matmul_precision("high")
 
 
 from rfml.experiment import *
 from rfml.train_iq import *
 from rfml.train_spec import *
-
 
 
 # Ensure that data directories have sigmf-meta files with annotations
@@ -247,6 +247,7 @@ experiments = {
         "iq_epochs": 10,
         "spec_epochs": 0,
         "notes": "narrowband test",
+        "iq_only_start_of_burst": False,
     },
 }
 
@@ -284,7 +285,6 @@ if __name__ == "__main__":
             )
 
             logs_timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
-
 
             if exp.iq_epochs > 0:
                 train_iq(
