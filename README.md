@@ -178,7 +178,7 @@ python3 convert_model.py --model_name=drone_detect --checkpoint=lightning_logs/v
 This will export a **_torchscript.pt** file.
 
 ```bash
-torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/ -r custom_handler/requirements.txt
+torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/ -r custom_handlers/requirements.txt
 ```
 
 This will generate a **.mar** file in the [models/](./models/) folder. [GamutRF](https://github.com/IQTLabs/gamutRF) can run this model and use it to classify signals.
