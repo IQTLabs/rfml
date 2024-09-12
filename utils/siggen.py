@@ -15,6 +15,9 @@ from gnuradio import gr
 from scipy.io import wavfile
 
 
+CENTER_FREQ = 100e6
+
+
 class fmsiggen(gr.top_block):
 
     def __init__(
@@ -51,7 +54,7 @@ class fmsiggen(gr.top_block):
             item_size=gr.sizeof_gr_complex,
             filename=sample_file,
             sample_rate=samp_rate,
-            center_freq=100e6,
+            center_freq=CENTER_FREQ,
             author="",
             description="",
             hw_info="",
@@ -77,6 +80,9 @@ class fmsiggen(gr.top_block):
         self.connect(
             (self.rational_resampler_xxx_0, 0), (self.blocks_sigmf_sink_minimal_0, 0)
         )
+
+    def bw(self):
+        return self.audio_samp_rate
 
 
 class amsiggen(gr.top_block):
@@ -130,7 +136,7 @@ class amsiggen(gr.top_block):
             item_size=gr.sizeof_gr_complex,
             filename=sample_file,
             sample_rate=samp_rate,
-            center_freq=100e6,
+            center_freq=CENTER_FREQ,
             author="",
             description="",
             hw_info="",
@@ -154,6 +160,9 @@ class amsiggen(gr.top_block):
         self.connect(
             (self.rational_resampler_xxx_2, 0), (self.blocks_sigmf_sink_minimal_0, 0)
         )
+
+    def bw(self):
+        return self.audio_samp_rate
 
 
 class noisesiggen(gr.top_block):
@@ -208,7 +217,7 @@ class noisesiggen(gr.top_block):
             item_size=gr.sizeof_gr_complex,
             filename=sample_file,
             sample_rate=samp_rate,
-            center_freq=100e6,
+            center_freq=CENTER_FREQ,
             author="",
             description="",
             hw_info="",
@@ -240,6 +249,9 @@ class noisesiggen(gr.top_block):
             (self.blocks_multiply_xx_0, 0), (self.blocks_sigmf_sink_minimal_0, 0)
         )
 
+    def bw(self):
+        return self.samp_rate
+
 
 def run_siggen(
     siggen,
@@ -250,6 +262,8 @@ def run_siggen(
     audio_gain,
 ):
     numbers = [str(random.randint(0, 1000)) for _ in range(int_count)]
+    if sample_file is None:
+        sample_file = siggen
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_file = os.path.join(tmpdir, "test.wav")
         try:
@@ -268,17 +282,25 @@ def run_siggen(
         out_samp_rate, audio_data = wavfile.read(wav_file)
         audio_secs = audio_data.shape[0] / out_samp_rate
         print(f"{audio_secs} seconds of audio")
-        siggen_cls = getattr(sys.modules[__name__], siggen)
+        siggen_cls = getattr(sys.modules[__name__], siggen + "siggen")
         print(f"using {siggen_cls}")
         tb = siggen_cls(wav_file, sample_file, samp_rate, audio_samp_rate, audio_gain)
         tb.start()
         tb.wait()
         sigmf_meta_filename = sample_file + ".sigmf-meta"
-        sigmf_meta = sigmf.sigmffile.fromfile(sigmf_meta_filename)
+        sigmf_meta = sigmf.sigmffile.fromfile(sigmf_meta_filename, skip_checksum=True)
+        upper_edge = CENTER_FREQ + tb.bw() / 2
+        lower_edge = CENTER_FREQ - tb.bw() / 2
         sigmf_meta.add_annotation(
-            0, sigmf_meta.sample_count, metadata={sigmf.SigMFFile.COMMENT_KEY: siggen}
+            0,
+            sigmf_meta.sample_count,
+            metadata={
+                sigmf.SigMFFile.LABEL_KEY: siggen,
+                sigmf.SigMFFile.FHI_KEY: upper_edge,
+                sigmf.SigMFFile.FLO_KEY: lower_edge,
+            },
         )
-        sigmf_meta.tofile(sigmf_meta_filename)
+        sigmf_meta.tofile(sigmf_meta_filename, skip_validate=True)
 
 
 def argument_parser():
@@ -294,7 +316,7 @@ def argument_parser():
         "--sample_file",
         dest="sample_file",
         type=str,
-        default="siggen",
+        default=None,
         help="base file name for sample file name output",
     )
     parser.add_argument(
