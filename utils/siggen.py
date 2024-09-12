@@ -155,6 +155,91 @@ class amsiggen(gr.top_block):
         )
 
 
+class noisesiggen(gr.top_block):
+
+    def __init__(
+        self,
+        wav_file,
+        sample_file,
+        samp_rate,
+        audio_samp_rate,
+        audio_gain,
+        audio_interp=4,
+    ):
+        gr.top_block.__init__(self, "noisesiggen", catch_exceptions=True)
+
+        ##################################################
+        # Variables
+        ##################################################
+        self.samp_rate = samp_rate
+        self.audio_samp_rate = audio_samp_rate
+        self.audio_interp = audio_interp
+        self.audio_gain = audio_gain
+
+        ##################################################
+        # Blocks
+        ##################################################
+
+        self.rational_resampler_xxx_2 = grfilter.rational_resampler_ccc(
+            interpolation=samp_rate,
+            decimation=audio_samp_rate,
+            taps=[],
+            fractional_bw=0,
+        )
+        self.low_pass_filter_1 = grfilter.interp_fir_filter_ccf(
+            1,
+            grfilter.firdes.low_pass(
+                0.5, audio_samp_rate, 5000, 400, window.WIN_HAMMING, 6.76
+            ),
+        )
+        self.blocks_wavfile_source_0 = blocks.wavfile_source(wav_file, False)
+        self.blocks_multiply_xx_2 = blocks.multiply_vcc(1)
+        self.blocks_multiply_xx_0 = blocks.multiply_vcc(1)
+        self.blocks_float_to_complex_0 = blocks.float_to_complex(1)
+        self.blocks_add_const_vxx_0 = blocks.add_const_cc(0.5)
+        self.analog_sig_source_x_2 = analog.sig_source_c(
+            audio_samp_rate, analog.GR_COS_WAVE, 0, 1, 0, 0
+        )
+        self.analog_const_source_x_0 = analog.sig_source_f(
+            0, analog.GR_CONST_WAVE, 0, 0, 0
+        )
+        self.blocks_sigmf_sink_minimal_0 = blocks.sigmf_sink_minimal(
+            item_size=gr.sizeof_gr_complex,
+            filename=sample_file,
+            sample_rate=samp_rate,
+            center_freq=100e6,
+            author="",
+            description="",
+            hw_info="",
+            is_complex=True,
+        )
+        self.analog_fastnoise_source_x_0 = analog.fastnoise_source_c(
+            analog.GR_GAUSSIAN, 1, 0, 8192
+        )
+
+        ##################################################
+        # Connections
+        ##################################################
+        self.connect(
+            (self.analog_const_source_x_0, 0), (self.blocks_float_to_complex_0, 1)
+        )
+        self.connect((self.analog_sig_source_x_2, 0), (self.blocks_multiply_xx_2, 1))
+        self.connect((self.blocks_add_const_vxx_0, 0), (self.blocks_multiply_xx_2, 0))
+        self.connect((self.blocks_float_to_complex_0, 0), (self.low_pass_filter_1, 0))
+        self.connect((self.blocks_multiply_xx_2, 0), (self.rational_resampler_xxx_2, 0))
+        self.connect(
+            (self.blocks_wavfile_source_0, 0), (self.blocks_float_to_complex_0, 0)
+        )
+        self.connect((self.low_pass_filter_1, 0), (self.blocks_add_const_vxx_0, 0))
+        self.connect((self.rational_resampler_xxx_2, 0), (self.blocks_multiply_xx_0, 0))
+        self.connect(
+            (self.analog_fastnoise_source_x_0, 0), (self.blocks_multiply_xx_0, 1)
+        )
+        self.connect(
+            (self.blocks_multiply_xx_0, 0), (self.blocks_sigmf_sink_minimal_0, 0)
+        )
+
+
 def run_siggen(
     siggen_cls, int_count, sample_file, samp_rate, audio_samp_rate, audio_gain
 ):
