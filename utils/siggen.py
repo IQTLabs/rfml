@@ -6,6 +6,7 @@ import sys
 import tempfile
 from argparse import ArgumentParser
 from subprocess import Popen, PIPE
+import sigmf
 from gnuradio import analog
 from gnuradio import blocks
 from gnuradio import filter as grfilter
@@ -241,7 +242,12 @@ class noisesiggen(gr.top_block):
 
 
 def run_siggen(
-    siggen_cls, int_count, sample_file, samp_rate, audio_samp_rate, audio_gain
+    siggen,
+    int_count,
+    sample_file,
+    samp_rate,
+    audio_samp_rate,
+    audio_gain,
 ):
     numbers = [str(random.randint(0, 1000)) for _ in range(int_count)]
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -262,10 +268,17 @@ def run_siggen(
         out_samp_rate, audio_data = wavfile.read(wav_file)
         audio_secs = audio_data.shape[0] / out_samp_rate
         print(f"{audio_secs} seconds of audio")
+        siggen_cls = getattr(sys.modules[__name__], siggen)
         print(f"using {siggen_cls}")
         tb = siggen_cls(wav_file, sample_file, samp_rate, audio_samp_rate, audio_gain)
         tb.start()
         tb.wait()
+        sigmf_meta_filename = sample_file + ".sigmf-meta"
+        sigmf_meta = sigmf.sigmffile.fromfile(sigmf_meta_filename)
+        sigmf_meta.add_annotation(
+            0, sigmf_meta.sample_count, metadata={sigmf.SigMFFile.COMMENT_KEY: siggen}
+        )
+        sigmf_meta.tofile(sigmf_meta_filename)
 
 
 def argument_parser():
@@ -318,7 +331,7 @@ def argument_parser():
 def main():
     options = argument_parser().parse_args()
     run_siggen(
-        getattr(sys.modules[__name__], options.siggen),
+        options.siggen,
         options.int_count,
         options.sample_file,
         options.samp_rate,
