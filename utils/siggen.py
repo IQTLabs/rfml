@@ -4,7 +4,7 @@ import os
 import random
 import sys
 import tempfile
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 from subprocess import Popen, PIPE
 import sigmf
 from gnuradio import analog
@@ -288,9 +288,13 @@ def run_sox(tmpdir, audio_samp_rate, int_count):
                 "1",
                 wav_file,
                 "synth",
-                str(int_count),
+                "0.1",
                 "sin",
                 "1000",
+                "pad",
+                "0.1",
+                "repeat",
+                str(int(int_count / 0.2)),
             ],
             stdout=PIPE,
             stdin=PIPE,
@@ -392,9 +396,9 @@ def argument_parser():
     parser.add_argument(
         "--speech",
         dest="speech",
-        type=bool,
         default=True,
         help="if True do random speech, if False 1kHz tone",
+        action=BooleanOptionalAction,
     )
     return parser
 
