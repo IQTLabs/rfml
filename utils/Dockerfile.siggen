@@ -1,0 +1,8 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="${PATH}:/root/.local/bin"
+RUN apt-get -yq update && apt-get install --no-install-recommends -yq festival festvox-us-slt-hts python3-pip gnuradio && pip install --break-system-packages sigmf
+COPY siggen.py /root/siggen.py
+RUN /root/siggen.py --int_count 1 --samp_rate 100000 --siggen am --sample_file /tmp/test && rm -f /tmp/test
+CMD ["/root/siggen.py"]
