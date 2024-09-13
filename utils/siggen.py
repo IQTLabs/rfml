@@ -253,6 +253,58 @@ class noisesiggen(gr.top_block):
         return self.samp_rate
 
 
+def run_festival(tmpdir, audio_samp_rate, int_count):
+    numbers = [str(random.randint(0, 1000)) for _ in range(int_count)]
+    wav_file = os.path.join(tmpdir, "test.wav")
+    try:
+        p = Popen(
+            ["text2wave", "-F", str(audio_samp_rate), "-o", wav_file],
+            stdout=PIPE,
+            stdin=PIPE,
+            stderr=PIPE,
+            text=True,
+        )
+    except FileNotFoundError:
+        print("error running text2wave: need festival installed")
+        sys.exit(-1)
+    print(f"writing {int_count} numbers")
+    print(p.communicate(input=" ".join(numbers))[0])
+    return wav_file
+
+
+def run_sox(tmpdir, audio_samp_rate, int_count):
+    wav_file = os.path.join(tmpdir, "test.wav")
+    try:
+        p = Popen(
+            [
+                "sox",
+                "-V",
+                "-r",
+                str(audio_samp_rate),
+                "-n",
+                "-b",
+                "16",
+                "-c",
+                "1",
+                wav_file,
+                "synth",
+                str(int_count),
+                "sin",
+                "1000",
+            ],
+            stdout=PIPE,
+            stdin=PIPE,
+            stderr=PIPE,
+            text=True,
+        )
+    except FileNotFoundError:
+        print("error running sox: need sox installed")
+        sys.exit(-1)
+    print("running sox")
+    print(p.communicate()[0])
+    return wav_file
+
+
 def run_siggen(
     siggen,
     int_count,
@@ -260,25 +312,15 @@ def run_siggen(
     samp_rate,
     audio_samp_rate,
     audio_gain,
+    speech,
 ):
-    numbers = [str(random.randint(0, 1000)) for _ in range(int_count)]
     if sample_file is None:
         sample_file = siggen
     with tempfile.TemporaryDirectory() as tmpdir:
-        wav_file = os.path.join(tmpdir, "test.wav")
-        try:
-            p = Popen(
-                ["text2wave", "-F", str(audio_samp_rate), "-o", wav_file],
-                stdout=PIPE,
-                stdin=PIPE,
-                stderr=PIPE,
-                text=True,
-            )
-        except FileNotFoundError:
-            print("error running text2wave: need festival installed")
-            sys.exit(-1)
-        print(f"writing {int_count} numbers")
-        print(p.communicate(input=" ".join(numbers))[0])
+        if speech:
+            wav_file = run_festival(tmpdir, audio_samp_rate, int_count)
+        else:
+            wav_file = run_sox(tmpdir, audio_samp_rate, int_count)
         out_samp_rate, audio_data = wavfile.read(wav_file)
         audio_secs = audio_data.shape[0] / out_samp_rate
         print(f"{audio_secs} seconds of audio")
@@ -347,6 +389,13 @@ def argument_parser():
         default=int(20),
         help="audio gain",
     )
+    parser.add_argument(
+        "--speech",
+        dest="speech",
+        type=bool,
+        default=True,
+        help="if True do random speech, if False 1kHz tone",
+    )
     return parser
 
 
@@ -359,6 +408,7 @@ def main():
         options.samp_rate,
         options.audio_samp_rate,
         options.audio_gain,
+        options.speech,
     )
 
 
