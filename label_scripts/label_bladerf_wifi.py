@@ -4,6 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 import rfml.annotation_utils as annotation_utils
+import rfml.data as data_class
 
 s3_data = {
     "anom_wifi": [
@@ -21,5 +22,5 @@ for label in s3_data:
     for data_glob in s3_data[label]:
         for f in tqdm(glob.glob(str(Path(data_glob)))):
             annotation_utils.annotate(
-                f, label=label, avg_window_len=256, avg_duration=3, debug=False
+                data_class.Data(f), labels={label: {}}, avg_window_len=256, debug=False
             )

@@ -1,9 +1,4 @@
-from pathlib import Path
-
 from rfml.experiment import *
-from rfml.train_iq import *
-from rfml.train_spec import *
-
 
 # Ensure that data directories have sigmf-meta files with annotations
 # Annotations can be generated using scripts in label_scripts directory or notebooks/Label_WiFi.ipynb and notebooks/Label_DJI.ipynb
@@ -262,47 +257,4 @@ if __name__ == "__main__":
         # "experiment_mavic3",
     ]
 
-    for experiment_name in experiments_to_run:
-        print(f"Running {experiment_name}")
-        try:
-            exp = Experiment(
-                experiment_name=experiment_name, **experiments[experiment_name]
-            )
-
-            logs_timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
-
-            if exp.iq_epochs > 0:
-                train_iq(
-                    train_dataset_path=exp.train_dir,
-                    val_dataset_path=exp.val_dir,
-                    num_iq_samples=exp.iq_num_samples,
-                    only_use_start_of_burst=exp.iq_only_start_of_burst,
-                    epochs=exp.iq_epochs,
-                    batch_size=exp.iq_batch_size,
-                    class_list=exp.class_list,
-                    output_dir=Path("experiment_logs", exp.experiment_name),
-                    logs_dir=Path("iq_logs", logs_timestamp),
-                )
-            else:
-                print("Skipping IQ training")
-
-            if exp.spec_epochs > 0:
-                train_spec(
-                    train_dataset_path=exp.train_dir,
-                    val_dataset_path=exp.val_dir,
-                    n_fft=exp.spec_n_fft,
-                    time_dim=exp.spec_time_dim,
-                    epochs=exp.spec_epochs,
-                    batch_size=exp.spec_batch_size,
-                    class_list=exp.class_list,
-                    yolo_augment=exp.spec_yolo_augment,
-                    skip_export=exp.spec_skip_export,
-                    force_yolo_label_larger=exp.spec_force_yolo_label_larger,
-                    output_dir=Path("experiment_logs", exp.experiment_name),
-                    logs_dir=Path("spec_logs", logs_timestamp),
-                )
-            else:
-                print("Skipping spectrogram training")
-
-        except Exception as error:
-            print(f"Error: {error}")
+    train({name: experiments[name] for name in experiments_to_run})

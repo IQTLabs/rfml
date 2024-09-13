@@ -30,23 +30,23 @@ for file_glob in data_globs:
             # min_annotation_length=10000,
             # max_annotations=500,
             # dc_block=True,
-            # time_start_stop=(1,3.5), 
+            # time_start_stop=(1,3.5),
             # necessary={
             #     "annotation_seconds": (0.001, -1)
             # },
-            labels = {
+            labels={
                 "mini2_video": {
                     "bandwidth_limits": (16e6, None),
                     "annotation_length": (10000, None),
                     "annotation_seconds": (0.001, None),
-                    "set_bandwidth": (-9e6, 9e6)
+                    "set_bandwidth": (-9e6, 9e6),
                 },
                 "mini2_telem": {
                     "bandwidth_limits": (None, 16e6),
                     "annotation_length": (10000, None),
                     "annotation_seconds": (None, 0.001),
-                }
-            }
+                },
+            },
         )
         # annotation_utils.annotate(
         #     data_obj,

@@ -50,8 +50,8 @@ if __name__ == "__main__":
                 "sample_rate": 20500000,
                 "frequency": 5735000000,
                 "iso_date_string": "2022-06-15",
-            }
-        )
+            },
+        ),
     ]
     for file_glob, metadata in data_globs:
         files = glob.glob(str(Path(file_glob)))

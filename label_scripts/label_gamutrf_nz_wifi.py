@@ -7,7 +7,8 @@ import rfml.annotation_utils as annotation_utils
 import rfml.data as data_class
 
 data_globs = [
-    "/data/s3_gamutrf/gamutrf-nz-wifi/gamutrf_ax_gain10_2430000000Hz_20480000sps.raw.zst"
+    # "/data/s3_gamutrf/gamutrf-nz-wifi/gamutrf_ax_gain10_2430000000Hz_20480000sps.raw.zst",
+    "/data/s3_gamutrf/gamutrf-nz-wifi/*.zst"
 ]
 
 
@@ -24,11 +25,11 @@ for file_glob in data_globs:
             verbose=False,
             bandwidth_estimation=0.99,
             overwrite=False,
-            labels = {
+            labels={
                 "wifi": {
-                    "bandwidth_limits": (10e6, None),
-                    "annotation_length": (10000, None),
-                    "annotation_seconds": (0.001, None),
+                    "bandwidth_limits": (5e6, None),
+                    # "annotation_length": (10000, None),
+                    "annotation_seconds": (0.0005, None),
                 }
-            }
+            },
         )

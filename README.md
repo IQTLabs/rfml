@@ -95,21 +95,31 @@ In the labeling scripts, the settings for autolabeling need to be tuned for the 
 
 ```python
 annotation_utils.annotate(
-                f, 
-                label="mavic3_video",               # This is the label that is applied to all of the matching annotations
-                avg_window_len=256,                 # The number of samples over which to average signal power
-                avg_duration=0.25,                  # The number of seconds, from the start of the recording to use to automatically calculate the SNR threshold, if it is None then all of the samples will be used
-                debug=False,    
-                set_bandwidth=10000000,            # Manually set the bandwidth of the signals in Hz, if this parameter is set, then spectral_energy_threshold is ignored
-                spectral_energy_threshold=0.95,     # Percentage used to determine the upper and lower frequency bounds for an annotation
-                force_threshold_db=-58,             # Used to manually set the threshold used for detecting a signal and creating an annotation. If None, then the automatic threshold calculation will be used instead.
-                overwrite=False,                    # If True, any existing annotations in the .sigmf-meta file will be removed
-                min_bandwidth=16e6,                 # The minimum bandwidth (in Hz) of a signal to annotate
-                max_bandwidth=None,                 # The maximum bandwidth (in Hz) of a signal to annotate
-                min_annotation_length=10000,        # The minimum numbers of samples in length a signal needs to be in order for it to be annotated. This is directly related to the sample rate a signal was captured at and does not take into account bandwidth. So 10000 samples at 20,000,000 samples per second, would mean a minimum transmission length of 0.0005 seconds
-                # max_annotations=500,              # The maximum number of annotations to automatically add  
-                dc_block=True                       # De-emphasize the DC spike when trying to calculate the frequencies for a signal
-            )
+    rfml.data.Data(filename),
+    avg_window_len=256,                             # The window size to use when averaging signal power
+    power_estimate_duration=0.1,                    # Process the file in chunks of power_estimate_duration seconds
+    debug_duration=0.25,                            # If debug==True, then plot debug_duration seconds of data in debug plots
+    debug=False,                                    # Set True to enable debugging plots                       
+    verbose=False,                                  # Set True to eanble verbose messages 
+    dry_run=False,                                  # Set True to disable annotations being written to SigMF-Meta file. 
+    bandwidth_estimation=True,                      # If set to True, will estimate signal bandwidth using Gaussian Mixture Models. If set to a float will estimate signal bandwidth using spectral thresholding. 
+    force_threshold_db=None,                        # Used to manually set the threshold used for detecting a signal and creating an annotation. If None, then the automatic threshold calculation will be used instead.
+    overwrite=True,                                 # If True, any existing annotations in the .sigmf-meta file will be removed
+    max_annotations=None,                           # If set, limits the number of annotations to add. 
+    dc_block=None,                                  # De-emphasize the DC spike when trying to calculate the frequencies for a signal
+    time_start_stop=None,                           # Sets the start/stop time for annotating the recording (must be tuple or list of length 2).
+    n_components = None,                            # Sets the number of mixture components to use when calculating signal detection threshold. If not set, then automatically calculated from labels. 
+    n_init=1,                                       # Number of initializations to use in Gaussian Mixture Method. Increasing this number can significantly increase run time. 
+    fft_len=256,                                    # FFT length used in calculating bandwidth
+    labels = {                                      # The labels dictionary defines the annotations that the script will attempt to find. 
+        "mavic3_video": {                           # The dictionary keys define the annotation labels. Only a key is necessary. 
+            "bandwidth_limits": (8e6, None),        # Optional. Set min/max bandwidth limit for a signal. If None, no min/max limit. 
+            "annotation_length": (10000, None),     # Optional. Set min/max annoation length in number of samples. If None, no min/max limit.
+            "annotation_seconds": (0.0001, 0.0025), # Optional. Set min/max annotation length in seconds. If None, no min/max limit. 
+            "set_bandwidth": (-8.5e6, 9.5e6)        # Optional. Ignore bandwidth estimation, set bandwidth manually. Limits are in relation to center frequency. 
+        }
+    }
+)
 ```
 
 ### Tips for Tuning Autolabeling
@@ -138,7 +148,7 @@ After you have finished labeling your data, the next step is to train a model on
 
 ### Configure
 
-This repo provides an automated script for training and evaluating models. To do this, configure the [run_experiments.py](rfml/run_experiments.py) file to point to the data you want to use and set the training parameters:
+This repo provides an automated script for training and evaluating models. To do this, configure the [mixed_experiments.py](rfml/mixed_experiments.py) file or create your own to point to the data you want to use and set the training parameters:
 
 ```python
     "experiment_0": { # A name to refer to the experiment
@@ -150,10 +160,10 @@ This repo provides an automated script for training and evaluating models. To do
     }
 ```
 
-Once you have the **run_experiments.py** file configured, run it:
+Once you have the **mixed_experiments.py** file configured, run it:
 
 ```bash
-python3 run_experiments.py
+python3 mixed_experiments.py
 ```
 
 Once the training has completed, it will print out the logs location, model accuracy, and the location of the best checkpoint: 
@@ -170,18 +180,15 @@ Best Model Checkpoint: lightning_logs/version_5/checkpoints/experiment_logs/expe
 
 ### Convert & Export IQ Models
 
-Once you have a trained model, you need to convert it into a portable format that can easily be served by TorchServe. To do this, use **convert_model.py**:
+Once you have a trained model, you need to convert it into a portable format that can easily be served by TorchServe. To do this, use **export_model.py**:
 
 ```bash
-python3 convert_model.py --model_name=drone_detect --checkpoint=lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
+python3 rfml/export_model.py --model_name=drone_detect --checkpoint=lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
 ```
-This will export a **_torchscript.pt** file.
+This will create a **_torchscript.pt** and **_torchserve.pt** file in the weights folder.
 
-```bash
-torch-model-archiver --force --model-name drone_detect --version 1.0 --serialized-file weights/drone_detect_torchscript.pt --handler custom_handlers/iq_custom_handler.py  --export-path models/ -r custom_handler/requirements.txt
-```
+A **.mar** file will also be created in the [models/](./models/) folder. [GamutRF](https://github.com/IQTLabs/gamutRF) can run this model and use it to classify signals.
 
-This will generate a **.mar** file in the [models/](./models/) folder. [GamutRF](https://github.com/IQTLabs/gamutRF) can run this model and use it to classify signals.
 
 ## Files
 
@@ -194,9 +201,11 @@ This will generate a **.mar** file in the [models/](./models/) folder. [GamutRF]
 
 [experiment.py](rfml/experiment.py) - Class to manage experiments 
 
+[export_model.py](rfml/export_model.py) - Convert and export model checkpoints to Torchscript/Torchserve/MAR format. 
+
 [models.py](rfml/models.py) - Class for I/Q models (based on TorchSig) 
 
-[run_experiments.py](rfml/run_experiments.py) - Experiment configurations and run script
+[experiments/](experiments/) - Experiment configurations and run script
 
 [sigmf_pytorch_dataset.py](rfml/sigmf_pytorch_dataset.py) - PyTorch style dataset class for SigMF data (based on TorchSig) 
 
