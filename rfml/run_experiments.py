@@ -1,5 +1,11 @@
 from pathlib import Path
 
+
+import torch
+
+torch.set_float32_matmul_precision("high")
+
+
 from rfml.experiment import *
 from rfml.train_iq import *
 from rfml.train_spec import *
@@ -235,6 +241,14 @@ experiments = {
         "spec_epochs": 0,
         "notes": "DJI Mavic3 Detection",
     },
+    "experiment_siggen": {
+        "class_list": ["am", "fm"],
+        "train_dir": ["/scratch/tmp/rfmltest"],
+        "iq_epochs": 10,
+        "spec_epochs": 0,
+        "notes": "narrowband test",
+        "iq_only_start_of_burst": False,
+    },
 }
 
 
@@ -260,6 +274,7 @@ if __name__ == "__main__":
         # "experiment_ettus_2",
         # "experiment_blade_2",
         # "experiment_mavic3",
+        "experiment_siggen",
     ]
 
     for experiment_name in experiments_to_run:
