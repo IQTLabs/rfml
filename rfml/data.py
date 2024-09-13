@@ -161,6 +161,7 @@ class Data:
                     )
             if not self.data_filename or not os.path.isfile(self.data_filename):
                 raise ValueError(f"File: {self.data_filename} is not a valid file.")
+
         elif self.filename.lower().endswith(".sigmf-data"):
             self.data_filename = self.filename
             self.sigmf_meta_filename = (
@@ -171,11 +172,17 @@ class Data:
                     f"File: {self.sigmf_meta_filename} is not a valid vile."
                 )
         elif self.filename.lower().endswith(".zst"):
+
             self.data_filename = self.filename
+
             possible_sigmf_meta_filenames = [
                 f"{os.path.splitext(self.data_filename)[0]}.sigmf-meta",
                 f"{self.data_filename}.sigmf-meta",
             ]
+
+            self.sigmf_meta_filename = (
+                f"{os.path.splitext(self.data_filename)[0]}.sigmf-meta"
+            )
 
             for possible_sigmf in possible_sigmf_meta_filenames:
                 if os.path.isfile(possible_sigmf):
@@ -185,7 +192,10 @@ class Data:
                 self.zst_to_sigmf_meta()
 
             if force_sigmf_data:
-                self.export_sigmf_data(output_path=self.data_filename + ".sigmf-data")
+                self.export_sigmf_data(
+                    output_path=f"{os.path.splitext(self.data_filename)[0]}.sigmf-data"
+                )
+
         elif self.filename.lower().endswith(".raw"):
             self.data_filename = self.filename
             self.sigmf_meta_filename = (
@@ -300,6 +310,8 @@ class Data:
                 # reached end of file
                 return None
 
+        # TODO: add autoscaling from sigmf library
+
         reader = self.get_sample_reader()
 
         np_dtype = SIGMF_TO_NP[self.metadata["global"]["core:datatype"]]
@@ -327,9 +339,9 @@ class Data:
                 return None
             if n_samples > -1 and n_buffered_samples != n_samples:
                 warnings.warn(
-                    f"Could only read {n_buffered_samples}/{n_samples} samples from {self.data_filename}."
+                    f"Could only read {n_buffered_samples} samples from {self.data_filename}, but requested {n_samples}."
                 )
-                return None
+                # return None
             x1d = np.frombuffer(
                 sample_buffer, dtype=sample_dtype, count=n_buffered_samples
             )

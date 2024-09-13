@@ -70,7 +70,7 @@ class SigMFDataset(SignalDataset):
         sample_count: int = 2048,  # 4096
         index_filter: Optional[Callable[[Tuple[Any, SignalCapture]], bool]] = None,
         class_list: Optional[List[str]] = None,
-        allowed_filetypes: Optional[List[str]] = [".sigmf-data"],
+        allowed_filetypes: Optional[List[str]] = [".sigmf-data", ".sigmf-meta"],
         only_first_samples: bool = True,
         **kwargs,
     ):
@@ -98,7 +98,6 @@ class SigMFDataset(SignalDataset):
         class_counts = {idx: 0 for idx in range(len(self.class_list))}
         for label_idx, _ in self.get_indices(indices):
             class_counts[label_idx] += 1
-        # print(f"{class_counts=}")
 
         return class_counts
 
@@ -156,46 +155,20 @@ class SigMFDataset(SignalDataset):
         index = []
         for file_type in self.allowed_filetypes:
             for r in root:
-                for f in glob.glob(
-                    os.path.join(r, "**", "*" + file_type), recursive=True
-                ):
+
+                if os.path.isfile(r):
+                    file_list = [f"{os.path.splitext(r)[0]}.sigmf-data"]
+                elif os.path.isdir(r):
+                    file_list = glob.glob(
+                        os.path.join(r, "**", "*" + file_type), recursive=True
+                    )
+                else:
+                    raise ValueError
+                for f in file_list:
                     if os.path.isfile(f"{os.path.splitext(f)[0]}.sigmf-meta"):
                         signals = self._parse_sigmf_annotations(f)
                         if signals:
                             index = index + signals
-                        # index = index + self._parse_sigmf_annotations(f)
-        print(f"Class List: {self.class_list}")
-
-        # # go through directories and find files
-        # non_empty_dirs = [
-        #     d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))
-        # ]
-        # non_empty_dirs.append(".")
-        # print(non_empty_dirs)
-        # # non_empty_dirs = [d for d in non_empty_dirs if os.listdir(os.path.join(root, d))]
-        # # print(non_empty_dirs)
-        # # Identify all files associated with each class
-        # index = []
-        # for dir_idx, dir_name in enumerate(non_empty_dirs):
-        #     data_dir = os.path.join(root, dir_name)
-
-        #     # Find files with allowed filetype
-        #     proper_sigmf_files = list(
-        #         filter(
-        #             lambda x: os.path.splitext(x)[1] in self.allowed_filetypes
-        #             and os.path.isfile(os.path.join(data_dir, x))
-        #             and os.path.isfile(
-        #                 os.path.join(data_dir, f"{os.path.splitext(x)[0]}.sigmf-meta")
-        #             ),
-        #             os.listdir(data_dir),
-        #         )
-        #     )
-
-        #     # Go through each file and create and index
-        #     for f in proper_sigmf_files:
-        #         index = index + self._parse_sigmf_annotations(os.path.join(data_dir, f))
-
-        # print(f"Class List: {self.class_list}")
 
         return index
 
@@ -220,7 +193,6 @@ class SigMFDataset(SignalDataset):
         """
 
         meta_file_name = f"{os.path.splitext(absolute_file_path)[0]}.sigmf-meta"
-        # meta_file_name = "{}{}".format(absolute_file_path.split("sigmf-data")[0], "sigmf-meta")
         meta = json.load(open(meta_file_name, "r"))
         item_type = indexer.SIGMF_DTYPE_MAP[meta["global"]["core:datatype"]]
         sample_size = item_type.itemsize * (
