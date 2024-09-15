@@ -16,5 +16,5 @@
 experiment_logs/
 lightning_logs/
 spec_logs/
-
+tensorboard_logs/
 rfml-dev/.README.md.swp

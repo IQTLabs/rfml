@@ -175,7 +175,7 @@ I/Q TRAINING COMPLETE
 Find results in experiment_logs/experiment_1/iq_logs/08_08_2024_09_17_32
 
 Total Accuracy: 98.10%
-Best Model Checkpoint: lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
+Best Model Checkpoint: experiment_logs/experiment_1/iq_logs/08_08_2024_09_17_32/checkpoints/checkpoint.ckpt
 ```
 
 ### Convert & Export IQ Models
@@ -183,7 +183,7 @@ Best Model Checkpoint: lightning_logs/version_5/checkpoints/experiment_logs/expe
 Once you have a trained model, you need to convert it into a portable format that can easily be served by TorchServe. To do this, use **export_model.py**:
 
 ```bash
-python3 rfml/export_model.py --model_name=drone_detect --checkpoint=lightning_logs/version_5/checkpoints/experiment_logs/experiment_1/iq_checkpoints/checkpoint.ckpt
+python3 rfml/export_model.py --model_name=drone_detect --checkpoint=experiment_logs/experiment_1/iq_logs/08_08_2024_09_17_32/checkpoints/checkpoint.ckpt --index_to_name=experiment_logs/experiment_1/iq_logs/08_08_2024_09_17_32/index_to_name.json
 ```
 This will create a **_torchscript.pt** and **_torchserve.pt** file in the weights folder.
 
