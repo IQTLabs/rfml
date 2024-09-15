@@ -3,9 +3,12 @@ import numpy as np
 import os
 import time
 import torch
+import logging
 
 from collections import defaultdict
 from ts.torch_handler.base_handler import BaseHandler
+
+from ts.utils.util import load_label_mapping
 
 try:
     import torch_xla.core.xla_model as xm
@@ -39,8 +42,10 @@ class TorchsigHandler(BaseHandler):
         :param context: Initial context contains model server system properties.
         :return:
         """
+        logging.info(f"\n\nStarting iq_custom_handler...\n\n")
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
+
             print(f"{self.handler_name}: using CUDA")
         elif XLA_AVAILABLE:
             self.device = xm.xla_device()
@@ -56,6 +61,15 @@ class TorchsigHandler(BaseHandler):
 
         self.manifest = context.manifest
         model_dir = context.system_properties.get("model_dir")
+
+        mapping_file_path = os.path.join(model_dir, "index_to_name.json")
+        # print(f"{os.listdir('.')=}")
+        # print(f"{os.listdir(model_dir)=}")
+
+        if not os.path.exists(mapping_file_path):
+            raise ValueError
+        self.mapping = load_label_mapping(mapping_file_path)
+
         self.model_pt_path = None
         if "serializedFile" in self.manifest["model"]:
             serialized_file = self.manifest["model"]["serializedFile"]
@@ -170,13 +184,14 @@ class TorchsigHandler(BaseHandler):
 
         self.add_to_avg(avg_pwr)
 
-        print("\n=====================================\n")
-        print("\n=====================================\n")
-        print(f"\n{data=}\n")
+        print("\n=====================================")
+        print("=====================================\n")
+        print(f"GATE")
+        print(f"\n{data.shape=}\n")
         print(f"\n{avg_pwr=}, \n{self.max_db=}, \n{self.avg_db_historical=}\n")
         print(f"\n{torch.min(torch.abs(data)**2)=}, {torch.max(torch.abs(data)**2)=}\n")
-        print("\n=====================================\n")
-        print("\n=====================================\n")
+        print("\n=====================================")
+        print("=====================================")
 
         if avg_pwr > (self.max_db + self.avg_db_historical) / 2:
             return False
@@ -197,6 +212,7 @@ class TorchsigHandler(BaseHandler):
 
         data = torch.tensor(np.frombuffer(body, dtype=np.complex64), dtype=torch.cfloat)
         print("\n=====================================\n")
+        print(f"PREPROCESS")
         print(f"\n{data=}\n")
         print(f"\n{torch.min(torch.abs(data)**2)=}, {torch.max(torch.abs(data)**2)=}\n")
         avg_pwr = torch.mean(torch.abs(data) ** 2)
@@ -209,7 +225,7 @@ class TorchsigHandler(BaseHandler):
         # data should be of size (N, 2, n_samples)
 
         data = data.to(self.device)
-        print("\n=====================================\n")
+        print("\n=====================================")
         return data
 
     def inference(self, model_input):
@@ -228,12 +244,17 @@ class TorchsigHandler(BaseHandler):
         :param inference_output: list of inference output
         :return: list of predict results
         """
+        print("\n=====================================\n")
+        print(f"POSTPROCESS")
+        # print(f"{self.mapping=}")
+
         confidences, class_indexes = torch.max(inference_output.data, 1)
         results = {
-            str(class_index): [{"confidence": confidence}]
+            self.mapping[str(class_index)]: [{"confidence": confidence}]
             for class_index, confidence in zip(
                 class_indexes.tolist(), confidences.tolist()
             )
         }
         print(f"\n{inference_output=}\n{results=}\n")
+        print("\n=====================================")
         return [results]

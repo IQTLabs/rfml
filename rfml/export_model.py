@@ -4,6 +4,7 @@ from torchsig.models.iq_models.efficientnet.efficientnet import efficientnet_b0
 import os
 import argparse
 import subprocess
+from pathlib import Path
 
 
 def argument_parser():
@@ -26,6 +27,12 @@ def argument_parser():
         type=str,
         default="custom_handlers/iq_custom_handler.py",
         help="Custom handler to use when exporting to MAR. Only used if --mode='export'. (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--index_to_name",
+        type=str,
+        required=True,
+        help="Path of JSON file defining mapping of label index to name.",
     )
     parser.add_argument(
         "--export_path",
@@ -75,7 +82,9 @@ def convert_model(model_name, checkpoint):
     return torchscript_file
 
 
-def export_model(model_name, torchscript_file, custom_handler, export_path):
+def export_model(
+    model_name, torchscript_file, custom_handler, index_to_name, export_path
+):
 
     torch_model_archiver_args = [
         "torch-model-archiver",
@@ -88,11 +97,15 @@ def export_model(model_name, torchscript_file, custom_handler, export_path):
         torchscript_file,
         "--handler",
         custom_handler,
+        "--extra-files",
+        index_to_name,
         "--export-path",
         export_path,
         "-r",
         "custom_handlers/requirements.txt",
     ]
+
+    print(f"Saving Torchserve MAR to {str(Path(export_path, model_name+'.mar'))}")
 
     subprocess.run(torch_model_archiver_args)
 
@@ -105,5 +118,9 @@ if __name__ == "__main__":
 
     if args.mode == "export":
         export_model(
-            args.model_name, torchscript_file, args.custom_handler, args.export_path
+            args.model_name,
+            torchscript_file,
+            args.custom_handler,
+            args.index_to_name,
+            args.export_path,
         )

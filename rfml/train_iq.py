@@ -19,6 +19,7 @@ from tqdm import tqdm
 from datetime import datetime
 import numpy as np
 import os
+import json
 from pathlib import Path
 
 from torchsig.models.iq_models.efficientnet.efficientnet import (
@@ -48,6 +49,7 @@ import torch
 import os
 from rfml.sigmf_pytorch_dataset import SigMFDataset
 from rfml.models import ExampleNetwork, SimpleRealNet
+from rfml.export_model import *
 
 from torchsig.transforms import (
     Compose,
@@ -287,17 +289,29 @@ def train_iq(
     )
 
     # Setup checkpoint callbacks
-    checkpoint_filename = f"{str(output_dir)}/iq_checkpoints/checkpoint"
+    checkpoint_filename = f"checkpoints/checkpoint"
     checkpoint_callback = ModelCheckpoint(
+        dirpath=logs_dir,
         filename=checkpoint_filename,
         save_top_k=True,
         monitor="val_loss",
         mode="min",
     )
+
+    index_to_name_file = Path(
+        logs_dir, "index_to_name.json"
+    )  # f"lightning_logs/{experiment_name}/index_to_name.json"
+    index_to_name = {i: class_list[i] for i in range(len(class_list))}
+    index_to_name_object = json.dumps(index_to_name, indent=4)
+    with open(index_to_name_file, "w") as outfile:
+        outfile.write(index_to_name_object)
+
     # Create and fit trainer
     experiment_name = experiment_name if experiment_name else 1
     logger = TensorBoardLogger(
-        save_dir=os.getcwd(), version=experiment_name, name="lightning_logs"
+        save_dir="tensorboard_logs",
+        # version=experiment_name,
+        name=experiment_name,  # "lightning_logs"
     )
     trainer = Trainer(
         max_epochs=epochs,
@@ -311,6 +325,7 @@ def train_iq(
         devices=1,
         logger=logger,
         # profiler="simple",
+        default_root_dir=logs_dir,
     )
     print(f"\nStarting training...")
     trainer.fit(example_model)
@@ -379,6 +394,17 @@ def train_iq(
     print(f"Find results in {str(Path(logs_dir))}\n")
     print(f"Total Accuracy: {acc*100:.2f}%")
     print(f"Best Model Checkpoint: {checkpoint_callback.best_model_path}")
+
+    torchscript_file = convert_model(
+        experiment_name, checkpoint_callback.best_model_path
+    )
+    export_model(
+        experiment_name,
+        torchscript_file,
+        "custom_handlers/iq_custom_handler.py",
+        index_to_name_file,
+        "models/",
+    )
 
 
 def visualize_dataset(
