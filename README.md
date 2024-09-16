@@ -138,9 +138,9 @@ If the frequency bounds are not lining up with the top or bottom part of a signa
 ![small signals](./images/min_annotation.png)
 
 Some tuning is needed for signals that have a short transmission duration and/or limited bandwidth. Here are a couple things to try if they are getting skipped:
-- `min_annotation_length` is the minimum number of samples for an annotation. If the signal is has less samples than this, it will not be annotated. Try lowering this.
-- The `average_duration` setting maybe too long and the signal is getting averaged into the noise. Try lowering this.
-- `min_bandwidth` is the minimum bandwidth (in Hz) for a signal to be detected. If this value is too high, signals that have less bandwidth will be ignored. Try lowering this.
+- `annotation_length` sets the minimum and maximum number of samples for an annotation. If the signal does not satisfy these constraints, it will not be annotated. Try modifying this.
+- `annotation_seconds` follows the same concept as `annotation_length` except with units being changed to seconds instead of samples.
+- `bandwidth_limits` sets the minimum and maximum bandwidth (in Hz) for a signal to be annotated. These limits will be compared against the estimated bandwidth. Try modifying these limits or the bandwidth estimation method. 
 
 ## Training a Model
 
@@ -148,7 +148,7 @@ After you have finished labeling your data, the next step is to train a model on
 
 ### Configure
 
-This repo provides an automated script for training and evaluating models. To do this, configure the [mixed_experiments.py](rfml/mixed_experiments.py) file or create your own to point to the data you want to use and set the training parameters:
+This repo provides an automated script for training and evaluating models. To do this, configure the [mixed_experiments.py](experiments/mixed_experiments.py) file or create your own experiment to point to the data you want to use and set the training parameters:
 
 ```python
     "experiment_0": { # A name to refer to the experiment
@@ -160,7 +160,7 @@ This repo provides an automated script for training and evaluating models. To do
     }
 ```
 
-Once you have the **mixed_experiments.py** file configured, run it:
+Once you have an experiments file configured, run it:
 
 ```bash
 python3 mixed_experiments.py
