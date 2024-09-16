@@ -39,9 +39,7 @@ for file_glob in data_globs:
         )
 
 
-data_globs = [
-   "/data/s3_gamutrf/gamutrf-lucas-collect/train/environment/*.zst"
-]
+data_globs = ["/data/s3_gamutrf/gamutrf-lucas-collect/train/environment/*.zst"]
 
 
 for file_glob in data_globs:
@@ -52,15 +50,15 @@ for file_glob in data_globs:
             data_obj,
             avg_window_len=1024,
             debug=False,
-            bandwidth_estimation=0.99,#True,
+            bandwidth_estimation=0.99,  # True,
             overwrite=False,
             # power_estimate_duration = 0.1,
             # n_components=3,
             # n_init=2,
             # dry_run=True,
-            labels = {
+            labels={
                 "environment": {
                     "annotation_length": (2048, None),
                 },
-            }
+            },
         )

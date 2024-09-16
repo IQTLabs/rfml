@@ -84,7 +84,7 @@ class SigMFDataset(SignalDataset):
             root = [root]
         self.index_files = []
         self.index = self.indexer_from_sigmf_annotations(root)
-        
+
         if index_filter:
             self.index = list(filter(index_filter, self.index))
 
