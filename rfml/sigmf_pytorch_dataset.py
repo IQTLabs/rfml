@@ -82,8 +82,9 @@ class SigMFDataset(SignalDataset):
         self.only_first_samples = only_first_samples
         if isinstance(root, str):
             root = [root]
+        self.index_files = []
         self.index = self.indexer_from_sigmf_annotations(root)
-
+        
         if index_filter:
             self.index = list(filter(index_filter, self.index))
 
@@ -166,10 +167,11 @@ class SigMFDataset(SignalDataset):
                     raise ValueError
                 for f in file_list:
                     if os.path.isfile(f"{os.path.splitext(f)[0]}.sigmf-meta"):
-                        signals = self._parse_sigmf_annotations(f)
+                        data_file_name = f"{os.path.splitext(f)[0]}.sigmf-data"
+                        signals = self._parse_sigmf_annotations(data_file_name)
                         if signals:
                             index = index + signals
-
+        self.index_files = list(set(self.index_files))
         return index
 
     def _get_name_to_idx(self, name: str) -> int:
@@ -246,6 +248,7 @@ class SigMFDataset(SignalDataset):
                     )
                     index.append((self._get_name_to_idx(label), signal))
 
+                self.index_files.append(absolute_file_path)
                 # print(f"Signal {label}  {signal.num_bytes} {signal.byte_offset} {signal.item_type} {signal.is_complex} ")
         else:
             print(

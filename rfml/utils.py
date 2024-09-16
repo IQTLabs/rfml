@@ -8,6 +8,13 @@ from pathlib import Path
 import rfml.data
 
 
+def to_sigmf(file_glob):
+
+    for f in glob.glob(file_glob):
+        if Path(f).suffix == ".sigmf-meta":
+            rfml.data.Data(f)
+
+
 def manual_to_sigmf(file, datatype, sample_rate, frequency, iso_date_string):
     # change to .sigmf-data
     if file.suffix in [".raw"]:

@@ -375,10 +375,14 @@ def train_iq(
     y_true = y_true_list
 
     acc = np.sum(np.asarray(y_preds) == np.asarray(y_true)) / len(y_true)
+
+    y_to_plot = sorted(list(set(y_true) | set(y_preds)))
+    classes_to_plot = [index_to_name[y] for y in y_to_plot]
+
     plot_confusion_matrix(
         y_true,
         y_preds,
-        classes=class_list,
+        classes=classes_to_plot, #class_list,
         normalize=True,
         title="Example Modulations Confusion Matrix\nTotal Accuracy: {:.2f}%".format(
             acc * 100
