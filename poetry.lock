@@ -4337,12 +4337,12 @@ opt-einsum = ["opt-einsum (>=3.3)"]
 
 [[package]]
 name = "torch-model-archiver"
-version = "0.11.1"
+version = "0.12.0"
 description = "Torch Model Archiver is used for creating archives of trained neural net models that can be consumed by TorchServe inference"
 optional = false
 python-versions = "*"
 files = [
-    {file = "torch_model_archiver-0.11.1-py3-none-any.whl", hash = "sha256:fb881b7f832b1c2565b5d14e085386cfa610524490955054e83dfef5cd2b78ef"},
+    {file = "torch_model_archiver-0.12.0-py3-none-any.whl", hash = "sha256:baaf66065396c3512030b3b2c57cce333edab9fffe9e528352cb4cc291645a78"},
 ]
 
 [package.dependencies]
@@ -4940,4 +4940,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.12"
-content-hash = "a892536ab3c4f3ba7bd94a1544eba9db81516352693c848bfcbb3c08893f93ae"
+content-hash = "0153ee504fec28bb0c648aea00c8adeed4b4559cca9ab953eb4dffcc2dfec347"
