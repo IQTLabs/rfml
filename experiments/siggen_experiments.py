@@ -2,6 +2,9 @@ import torch
 
 torch.set_float32_matmul_precision("medium")
 from rfml.experiment import *
+import sys
+
+root = sys.argv[1]
 
 #
 # python rfml/siggen_experiments.py
@@ -16,12 +19,12 @@ experiments = {
     "siggen_experiment": {
         "class_list": ["am", "fm"],
         "train_dir": [
-            "/data/siggen/fm.sigmf-meta",
-            "/data/siggen/am.sigmf-meta",
+            f"{root}/fm.sigmf-meta",
+            f"{root}/am.sigmf-meta",
         ],
         "val_dir": [
-            "/data/siggen/fm.sigmf-meta",
-            "/data/siggen/am.sigmf-meta",
+            f"{root}/fm.sigmf-meta",
+            f"{root}/am.sigmf-meta",
         ],
         "iq_epochs": 10,
         "iq_train_limit": 0.5,

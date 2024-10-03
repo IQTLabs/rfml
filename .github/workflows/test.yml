@@ -20,10 +20,15 @@ jobs:
       - name: Install poetry and dependencies
         # TODO: remove workaround for https://github.com/pytorch/pytorch/issues/100974 once torch upgraded.
         run: |
+          sudo apt-get -yq update && sudo apt-get install -yq libnvidia-compute-535-server nvidia-cuda-dev
           git submodule init && \
           git submodule update && \
           poetry config virtualenvs.create false && \
           poetry install && \
-          for i in torch ; do poetry run pip install --no-cache-dir "$i"=="$(grep $i pyproject.toml | grep -Eo '\"[0-9\.]+' | sed 's/\"//g')" || exit 1 ; done
-          python3 -c "import torch" && \
+          for i in torch torchvision ; do poetry run pip install --no-cache-dir "$i"=="$(grep $i\\s pyproject.toml | grep -Eo '\"[0-9\.]+' | sed 's/\"//g')" || exit 1 ; done
+          python -c 'import torch' && \
+          python -c 'import rfml.annotation_utils as annotation_utils' && \
           poetry run black . --check --force-exclude torchsig
+      - name: Run e2e test
+        run: |
+          mkdir -p testdata && DATA=$(realpath testdata) PYTHON=$(which python3) ./utils/end_to_end_siggen.sh
