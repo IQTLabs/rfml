@@ -2,15 +2,21 @@
 
 set -e
 
-docker compose -f /data/gamutrf-deploy/offline.yml down --remove-orphans
-docker compose -f /data/gamutrf-deploy/torchserve-cuda.yml down --remove-orphans
-VOL_PREFIX=/data docker compose -f /data/gamutrf-deploy/torchserve-cuda.yml up -d
+PYTHON="${PYTHON:=python3}"
+TORCHSERVE="${TORCHSERVE:=torchserve.yml}"
+OFFLINE="${OFFLINE:=offline.yml}"
+DATA="${DATA:=/data}"
+
+
+docker compose -f $DATA/gamutrf-deploy/$OFFLINE down --remove-orphans
+docker compose -f $DATA/gamutrf-deploy/$TORCHSERVE down --remove-orphans
+VOL_PREFIX=$DATA docker compose -f $DATA/gamutrf-deploy/$TORCHSERVE up -d
 
 for i in am fm ; do
-    sudo rm -rf /data/samples
-    VOL_PREFIX=/data RECORDING=/logs/siggen/test/$i.sigmf-meta docker compose -f /data/gamutrf-deploy/offline.yml up gamutrf
+    sudo rm -rf $DATA/samples
+    VOL_PREFIX=$DATA RECORDING=/logs/siggen/test/$i.sigmf-meta docker compose -f $DATA/gamutrf-deploy/$OFFLINE up gamutrf
     echo $i
-    ./utils/count_labels.py /data/samples/*/*sigmf-meta $i
+    $PYTHON ./utils/count_labels.py $DATA/samples/*/*sigmf-meta $i
 done
 
-VOL_PREFIX=/data docker compose -f /data/gamutrf-deploy/torchserve-cuda.yml down
+VOL_PREFIX=$DATA docker compose -f $DATA/gamutrf-deploy/$TORCHSERVE down

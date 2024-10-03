@@ -5,12 +5,15 @@ from tqdm import tqdm
 
 import rfml.annotation_utils as annotation_utils
 import rfml.data as data_class
+import sys
+
+root = sys.argv[1]
 
 # generated with
 # $ for i in am fm ; do /scratch/iqtlabs/rfml/utils/siggen.py --samp_rate 1000000 --siggen $i --int_count 1000 ; done
 data_globs = {
-    "am": ["/data/siggen/am.sigmf-meta"],
-    "fm": ["/data/siggen/fm.sigmf-meta"],
+    "am": [f"{root}/am.sigmf-meta"],
+    "fm": [f"{root}/fm.sigmf-meta"],
 }
 
 

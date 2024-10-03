@@ -9,30 +9,40 @@ if [ "$0" != "./utils/end_to_end_siggen.sh" ] ; then
     exit 1
 fi
 
-if [ ! -w /data ] ; then
-    echo /data must exist and be writable
+DATA="${DATA:=/data}"
+
+if [ ! -w $DATA ] ; then
+    echo $DATA must exist and be writable
     exit 1
 fi
 
-rm -rf /data/siggen
-mkdir -p /data/siggen
-mkdir -p /data/siggen/test
-mkdir -p /data/model_store
+PYTHON="${PYTHON:=python3}"
+NUMBERS="${NUMBERS:=4}"
+SRATE="${SRATE:=500000}"
 
-git clone https://github.com/iqtlabs/gamutrf-deploy /data/gamutrf-deploy
+echo using python $PYTHON
+
+rm -rf $DATA/siggen
+mkdir -p $DATA/siggen
+mkdir -p $DATA/siggen/test
+mkdir -p $DATA/model_store
+
+git clone https://github.com/iqtlabs/gamutrf-deploy $DATA/gamutrf-deploy
 
 # generate both training and test data
 docker build -f utils/Dockerfile.siggen utils -t iqtlabs/rfml-siggen
 for i in am fm ; do
     for o in /data/siggen/$i /data/siggen/test/$i ; do
-        docker run -v /data/siggen:/data/siggen -u $(id -u ${USER}):$(id -g ${USER}) -t iqtlabs/rfml-siggen /siggen.py --samp_rate 1000000 --siggen $i --int_count 100 --sample_file $o
+        docker run -v $DATA/siggen:/data/siggen -t iqtlabs/rfml-siggen /siggen.py --samp_rate $SRATE --siggen $i --int_count $NUMBERS --sample_file $o
     done
 done
 
+sudo chown -R $(id -u):$(id -g) $DATA/siggen
+
 # label data and produce model
-python label_scripts/label_siggen.py
-python experiments/siggen_experiments.py
-cp models/siggen_experiment.mar /data/model_store/torchsig_model.mar
+$PYTHON label_scripts/label_siggen.py $DATA/siggen
+$PYTHON experiments/siggen_experiments.py $DATA/siggen
+cp models/siggen_experiment.mar $DATA/model_store/torchsig_model.mar
 
 # run inference
 ./utils/gamutrf_offline_siggen.sh

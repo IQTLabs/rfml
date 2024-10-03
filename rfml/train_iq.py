@@ -321,7 +321,7 @@ def train_iq(
             ),
             checkpoint_callback,
         ],
-        accelerator="gpu",
+        accelerator="auto",
         devices=1,
         logger=logger,
         # profiler="simple",
