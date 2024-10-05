@@ -23,6 +23,6 @@ if not labels:
 
 prop = round(correct_labels / labels * 100, 2)
 print(correct_labels, labels, prop)
-if prop < prop_thresh:
+if prop < float(prop_thresh):
     print("predicted class is less than threshold")
     sys.exit(-1)
