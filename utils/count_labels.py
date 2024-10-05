@@ -5,6 +5,7 @@ import sys
 
 sigmf_file = sys.argv[1]
 label_class = sys.argv[2]
+prop_thresh = sys.argv[3]
 
 labels = 0
 correct_labels = 0
@@ -22,6 +23,6 @@ if not labels:
 
 prop = round(correct_labels / labels * 100, 2)
 print(correct_labels, labels, prop)
-if prop < 99:
+if prop < prop_thresh:
     print("predicted class is less than threshold")
     sys.exit(-1)
