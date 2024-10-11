@@ -14,8 +14,8 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          virtualenvs-create: false
-          virtualenvs-in-project: false
+          virtualenvs-create: true
+          virtualenvs-in-project: true
           version: 1.8.3
       - name: Install poetry and dependencies
         # TODO: remove workaround for https://github.com/pytorch/pytorch/issues/100974 once torch upgraded.
@@ -23,12 +23,16 @@ jobs:
           sudo apt-get -yq update && sudo apt-get install -yq libnvidia-compute-535-server nvidia-cuda-dev
           git submodule init && \
           git submodule update && \
-          poetry config virtualenvs.create false && \
+          sed -i "s/torch==[0-9\.]+/torch/g" torchsig/pyproject.toml && \
+          poetry config virtualenvs.create true && \
           poetry install && \
           for i in torch torchvision ; do poetry run pip install --no-cache-dir "$i"=="$(grep $i\\s pyproject.toml | grep -Eo '\"[0-9\.]+' | sed 's/\"//g')" || exit 1 ; done
-          python -c 'import torch' && \
-          python -c 'import rfml.annotation_utils as annotation_utils' && \
+          poetry run python -c 'import torch' && \
+          poetry run python -c 'import rfml.annotation_utils as annotation_utils' && \
           poetry run black . --check --force-exclude torchsig
       - name: Run e2e test
         run: |
-          mkdir -p testdata && DATA=$(realpath testdata) PYTHON=$(which python3) ./utils/end_to_end_siggen.sh
+          mkdir -p testdata && \
+          DATA=$(realpath testdata) ./utils/run_siggen.sh && \
+          rm -rf $(poetry env info -p) && \
+          DATA=$(realpath testdata) ./utils/gamutrf_offline_siggen.sh
