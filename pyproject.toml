@@ -19,7 +19,7 @@ python-on-whales = "^0.73.0"
 sigmf = "^1.2.0"
 tqdm = "^4.66.4"
 torch = "2.4.1"
-torchvision = "0.19.1"
+torchvision = "0.22.1"
 torch-model-archiver = "^0.12.0"
 torchsig = {path = "torchsig"}
 cupy-cuda11x = "13.3.0"
